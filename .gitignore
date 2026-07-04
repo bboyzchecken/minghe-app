@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+.next/
+.turbo/
+dist/
+out/
+
+# env & secrets
+.env
+.env.local
+.env*.local
+
+# database (local dev)
+*.db
+*.db-journal
+
+# misc
+.DS_Store
+*.log
+.vercel
+next-env.d.ts
+
+# prisma generated client lives in node_modules (default)
+
+# claude code runtime
+.claude/scheduled_tasks.lock
+.claude/settings.local.json

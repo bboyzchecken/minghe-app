@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#C24A32"/>
+  <rect x="4" y="4" width="56" height="56" rx="10" fill="none" stroke="#FAF6EE" stroke-opacity="0.35" stroke-width="1.5"/>
+  <text x="32" y="27" text-anchor="middle" dominant-baseline="central" font-family="'Noto Serif SC','SimSun',serif" font-size="24" font-weight="700" fill="#FAF6EE">命</text>
+  <text x="32" y="49" text-anchor="middle" dominant-baseline="central" font-family="'Noto Serif SC','SimSun',serif" font-size="24" font-weight="700" fill="#FAF6EE">合</text>
+</svg>

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "minghe-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@minghe/web", "dev"],
+      "port": 3000,
+      "autoPort": true
+    }
+  ]
+}

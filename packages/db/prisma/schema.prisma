@@ -1,0 +1,102 @@
+// 命合 Mìnghé — Database Schema (ตามแผนหัวข้อ 6)
+// Dev: SQLite (ใช้ได้ทันที ไม่ต้องตั้ง DB)
+// Production: เปลี่ยน provider เป็น "postgresql" + DATABASE_URL ของ Supabase/Neon
+// (โครง schema ออกแบบให้พอร์ตไป Postgres ได้ตรงๆ)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String?
+  name         String?
+  role         String        @default("CLIENT") // CLIENT | ADMIN (SQLite ไม่มี enum)
+  credits      Int           @default(0)
+  createdAt    DateTime      @default(now())
+  orders       Order[]
+  payments     Payment[]
+  subscription Subscription?
+}
+
+model Subscription {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  plan         String // starter | business | agency
+  status       String // active | canceled | past_due
+  reportsQuota Int
+  reportsUsed  Int      @default(0)
+  renewsAt     DateTime
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model Order {
+  id          String    @id @default(cuid())
+  createdById String? // null = guest checkout
+  guestEmail  String? // ช่องทางติดต่อ guest
+  status      String    @default("pending") // pending | processing | completed | failed
+  subjectData String // JSON: ข้อมูลผู้ถูกวิเคราะห์ (SubjectData)
+  orgData     String // JSON: ข้อมูลองค์กร/ทีม (OrgData)
+  addons      String    @default("[]") // JSON: รายการ add-on
+  priceSatang Int       @default(0)
+  errorNote   String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  createdBy   User?     @relation(fields: [createdById], references: [id])
+  report      Report?
+  assets      Asset[]
+  payment     Payment?
+}
+
+model Report {
+  id         String      @id @default(cuid())
+  orderId    String      @unique
+  accessCode String      @unique // MH-XXXX-XXXX
+  pinHash    String? // PIN เสริม (optional)
+  pdfUrl     String?
+  reportData String // JSON: ผลวิเคราะห์แบบมีโครงสร้าง (ReportData)
+  status     String      @default("ready")
+  expiresAt  DateTime? // หมดอายุ (optional)
+  revoked    Boolean     @default(false)
+  viewCount  Int         @default(0)
+  createdAt  DateTime    @default(now())
+  order      Order       @relation(fields: [orderId], references: [id])
+  accessLogs AccessLog[]
+}
+
+model Asset {
+  id        String   @id @default(cuid())
+  orderId   String
+  url       String
+  type      String // photo | pdf
+  createdAt DateTime @default(now())
+  order     Order    @relation(fields: [orderId], references: [id])
+}
+
+model AccessLog {
+  id         String   @id @default(cuid())
+  reportId   String
+  accessedAt DateTime @default(now())
+  ipHash     String?
+  report     Report   @relation(fields: [reportId], references: [id])
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  orderId   String?  @unique
+  userId    String?
+  amount    Int // สตางค์
+  currency  String   @default("THB")
+  provider  String // stripe | omise | mock | credits
+  status    String // paid | pending | failed
+  meta      String   @default("{}") // JSON เพิ่มเติมจาก gateway
+  createdAt DateTime @default(now())
+  order     Order?   @relation(fields: [orderId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
+}
