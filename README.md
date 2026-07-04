@@ -3,16 +3,19 @@
 > **เมื่อ "คนที่ใช่" เจอ "ที่ที่ใช่"** — วิเคราะห์ความเหมาะสมของพนักงานกับองค์กร
 > ด้วยปาจือ (八字) และโหงวเฮ้ง แม่นยำระดับซินแสตัวจริง ส่งมอบรายงานผ่านรหัสเปิดที่ปลอดภัย
 
-## เริ่มใช้งาน (Local Development)
+## 🚀 เริ่มเร็วที่สุด — Docker (แนะนำสำหรับนำเสนอ)
 
-ต้องมี Node.js ≥ 20 และ pnpm (`npm i -g pnpm`)
+มีแค่ Docker ก็รันทั้งระบบ (เว็บ + PostgreSQL + seed รายงานเดโม) ได้ด้วยคำสั่งเดียว:
 
 ```bash
-pnpm install                      # ติดตั้ง dependencies ทั้ง monorepo
-pnpm --filter @minghe/db db:push  # สร้างฐานข้อมูล SQLite (dev.db)
-pnpm --filter @minghe/db db:seed  # แอดมิน + ลูกค้าเดโม + รายงานตัวอย่าง
-pnpm --filter @minghe/web dev     # เปิดเว็บที่ http://localhost:3000
+docker compose up --build          # รอ ~3-5 นาทีครั้งแรก
+# เปิด http://localhost:3000  ·  รายงานเดโม /r/MH-DEMO-2569
 ```
+
+- ระบบ push schema + seed ให้อัตโนมัติตอนสตาร์ต (idempotent — รันซ้ำได้)
+- พอร์ตชนกัน? ใช้ `WEB_PORT=3100 docker compose up --build` แล้วเปิด `:3100`
+- หยุด: `docker compose down` (ลบข้อมูลด้วย: `docker compose down -v`)
+- **นำ image ไป deploy ที่ไหนก็ได้ที่มี Docker** — self-contained ทั้งหมด (ดู "Deploy ฟรี" ด้านล่าง)
 
 บัญชีที่ seed ให้:
 
@@ -23,14 +26,29 @@ pnpm --filter @minghe/web dev     # เปิดเว็บที่ http://loc
 
 รายงานตัวอย่างเปิดได้ทันทีที่ `/r/MH-DEMO-2569` (ไม่ต้องล็อกอิน)
 
-> ⚠️ เปลี่ยนรหัสผ่านทั้งสองบัญชีก่อนขึ้น production เสมอ (ตั้งผ่าน env `ADMIN_EMAIL` / `ADMIN_PASSWORD` แล้ว seed ใหม่)
+> ⚠️ เปลี่ยน `AUTH_SECRET` + รหัสผ่านใน `docker-compose.yml` ก่อนใช้จริงเสมอ
+
+## Local Development (แก้โค้ดสด)
+
+ต้องมี Node.js ≥ 20, pnpm (`npm i -g pnpm`) และ PostgreSQL
+
+```bash
+docker compose up -d db            # รัน Postgres แค่ตัวเดียว (หรือใช้ Neon/Postgres ของคุณ)
+cp .env.example packages/db/.env   # ตั้ง DATABASE_URL ให้ตรง Postgres
+cp .env.example apps/web/.env.local
+pnpm install
+pnpm --filter @minghe/db db:push   # สร้างตาราง
+pnpm --filter @minghe/db db:seed   # แอดมิน + รายงานเดโม
+pnpm --filter @minghe/web dev      # http://localhost:3000
+```
+
+> ใช้ Postgres ทั้ง dev และ prod (พอร์ตข้ามได้ง่าย) — อยากใช้ SQLite แบบไม่ต่อเน็ตตอน dev
+> เปลี่ยน `provider = "sqlite"` ใน `packages/db/prisma/schema.prisma` + `DATABASE_URL="file:./dev.db"`
 
 ### Environment Variables
 
-คัดลอก `.env.example` แล้วปรับค่า — ไฟล์ env ใช้ 2 จุด:
-
-- `packages/db/.env` — `DATABASE_URL` (Prisma CLI + seed)
-- `apps/web/.env.local` — `DATABASE_URL`, `AUTH_SECRET`, `ANTHROPIC_API_KEY` (optional), `NEXT_PUBLIC_APP_URL`
+คัดลอก `.env.example` — env ใช้ 2 จุด (local): `packages/db/.env` (Prisma CLI + seed)
+และ `apps/web/.env.local` (`DATABASE_URL`, `AUTH_SECRET`, `ANTHROPIC_API_KEY` optional, `CRON_SECRET`)
 
 **ไม่ใส่ `ANTHROPIC_API_KEY` ก็ใช้งานได้เต็มระบบ** — รายงานใช้ตัวเรียบเรียงไทยแบบ
 deterministic และข้ามการอ่านโหงวเฮ้งจากรูป / ใส่ key เมื่อไหร่ ระบบจะเรียก Claude
@@ -96,20 +114,49 @@ pnpm --filter @minghe/core test   # 69 เทสต์ ต้องผ่าน 
 - ความปลอดภัย: rate limit ต่อ IP, PIN เสริม (optional), วันหมดอายุ, เพิกถอนจาก admin,
   audit log ทุกการเข้าถึง (เก็บ IP แบบ hash ทางเดียว — PDPA)
 
-## Deploy (Production)
+## Deploy ฟรี 🆓
 
-1. **DB:** สร้าง Postgres (Supabase/Neon) → แก้ `packages/db/prisma/schema.prisma`
-   `provider = "postgresql"` → ตั้ง `DATABASE_URL` → `pnpm db:push && pnpm db:seed`
-2. **Web:** Vercel — root directory `apps/web`, ตั้ง env: `DATABASE_URL`, `AUTH_SECRET`
-   (สุ่มใหม่ยาวๆ), `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_APP_URL`, `CRON_SECRET`
-3. **Rate limit:** production หลาย instance แนะนำสลับ `lib/rate-limit.ts`
-   เป็น Upstash Redis (interface เตรียมไว้แล้ว เปลี่ยนไฟล์เดียว) — โค้ดดึง client IP
-   จาก `x-real-ip`/ขวาสุดของ `x-forwarded-for` (กันปลอม XFF)
-4. **Retention cron:** `apps/web/vercel.json` ตั้ง Vercel Cron เรียก `/api/cron/purge-photos`
-   ทุกวัน (ลบรูปถ่ายใบหน้าที่เกิน 90 วันหลังส่งมอบ ตาม PDPA) — ต้องตั้ง `CRON_SECRET`
-4. **รูปอัปโหลด:** MVP เก็บเป็น data URL ใน DB — ปริมาณมากควรย้ายไป
-   Supabase Storage / Cloudflare R2 (จุดต่อที่ `lib/orders.ts`)
-5. **ชำระเงินจริง:** ต่อ Stripe/Omise ที่ `payOrder()` ใน `lib/orders.ts`
+แอปนี้ **ไม่พึ่งบริการเสียเงินเลย** — จ่ายเงินเป็น mock, รูปเก็บเป็น data URL ในฐานข้อมูล
+(ไม่ต้องมี S3/storage), AI เป็น optional, auth เขียนเอง — ต้องการภายนอกแค่ **ฐานข้อมูล**
+มี 2 ทางที่ฟรี 100%:
+
+### ทาง A — Docker ที่ไหนก็ได้ (พก image ไปเครื่องไหนก็รันได้)
+
+image เป็น self-contained (มี Postgres มากับ compose) — deploy บนอะไรก็ได้ที่รัน Docker:
+VPS ฟรี/ราคาถูก, เครื่องตัวเอง, Render/Railway/Fly (มี free trial), ฯลฯ
+
+```bash
+docker compose up --build -d       # ทั้งเว็บ + Postgres + seed
+# เปลี่ยน AUTH_SECRET + รหัสผ่านใน docker-compose.yml ก่อน
+```
+
+จะแยก image ไปที่อื่น: `docker build -t minghe .` แล้ว push ขึ้น registry / ต่อ Postgres ของ host
+ผ่าน env `DATABASE_URL` (image รัน `prisma db push` + seed + start ให้เองตอนสตาร์ต)
+
+### ทาง B — Vercel + Neon (แนะนำสำหรับได้ลิงก์สาธารณะเร็วสุด)
+
+1. **Neon** (neon.tech) → สร้าง project ฟรี → คัดลอก **pooled connection string**
+2. เอา URL นั้น seed ฐานข้อมูลครั้งเดียวจากเครื่องตัวเอง:
+   ```bash
+   # ใส่ Neon URL ใน packages/db/.env: DATABASE_URL="postgresql://...-pooler..."
+   pnpm --filter @minghe/db db:push && pnpm --filter @minghe/db db:seed
+   ```
+3. **Vercel** (vercel.com) → Import repo GitHub → **Root Directory = `apps/web`** →
+   ตั้ง env: `DATABASE_URL` (Neon), `AUTH_SECRET` (สุ่มยาวๆ), `NEXT_PUBLIC_APP_URL`,
+   `CRON_SECRET` (+ `ANTHROPIC_API_KEY` ถ้าต้องการ) → Deploy → ได้ลิงก์ `.vercel.app`
+
+> Vercel Hobby ฟรีสำหรับเดโม/พรีเซนต์ (ToS ห้ามใช้เชิงพาณิชย์เต็มตัว) · Neon free tier
+> 0.5GB พอเหลือเฟือ · รายงานไม่ใช้ AI สร้างเสร็จ <1 วิ อยู่ในลิมิต serverless 10 วิ
+
+### หมายเหตุ production (เมื่อใช้จริง)
+
+- **Rate limit:** หลาย instance แนะนำสลับ `lib/rate-limit.ts` เป็น Upstash Redis
+  (interface เตรียมไว้แล้ว) — โค้ดดึง client IP จาก `x-real-ip`/ขวาสุด `x-forwarded-for` (กันปลอม)
+- **Retention cron:** `apps/web/vercel.json` ตั้ง Cron เรียก `/api/cron/purge-photos` ทุกวัน
+  (ลบรูปใบหน้าเกิน 90 วัน ตาม PDPA — ต้องตั้ง `CRON_SECRET`) · บน Docker ตั้ง cron ของ host
+  ยิง endpoint นี้เอง
+- **รูปอัปโหลด:** MVP เก็บเป็น data URL ใน DB — ปริมาณมากควรย้าย Supabase Storage / R2
+- **ชำระเงินจริง:** ต่อ Stripe/Omise ที่ `payOrder()` ใน `lib/orders.ts` (จุดเดียว)
 
 ## PDPA
 

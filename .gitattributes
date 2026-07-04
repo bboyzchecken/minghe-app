@@ -1,0 +1,6 @@
+# บังคับ LF สำหรับสคริปต์เชลล์ — กัน CRLF จาก Windows ทำ Docker entrypoint พัง
+*.sh text eol=lf
+docker/entrypoint.sh text eol=lf
+
+# ปกติให้ normalize เป็น LF ใน repo
+* text=auto eol=lf

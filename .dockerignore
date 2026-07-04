@@ -1,0 +1,27 @@
+# deps + build artifacts (rebuilt inside the image)
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+dist
+**/dist
+
+# vcs + local
+.git
+.gitignore
+.claude
+scratchpad
+
+# secrets + local db (ให้ค่าผ่าน compose/env เท่านั้น)
+**/.env
+**/.env.local
+**/.env*.local
+**/dev.db
+**/dev.db-journal
+
+# misc
+**/*.log
+*.md
+!README.md

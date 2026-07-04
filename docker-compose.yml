@@ -1,0 +1,52 @@
+# ============================================================
+# 命合 Mìnghé — docker-compose (all-in-one)
+# รันทั้งระบบด้วยคำสั่งเดียว: docker compose up --build
+# แล้วเปิด http://localhost:3000 (รายงานเดโม /r/MH-DEMO-2569)
+#
+# นำไป deploy ที่ไหนก็ได้ที่มี Docker — เปลี่ยนแค่ AUTH_SECRET + รหัสผ่าน
+# ============================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: minghe
+      POSTGRES_PASSWORD: minghe_dev_secret
+      POSTGRES_DB: minghe
+    volumes:
+      - minghe_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U minghe -d minghe']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # ---- ฐานข้อมูล (ชี้ไปที่ service db ข้างบน) ----
+      DATABASE_URL: 'postgresql://minghe:minghe_dev_secret@db:5432/minghe'
+      # ---- ต้องเปลี่ยนก่อนใช้จริง! สุ่มใหม่ยาวๆ ----
+      AUTH_SECRET: 'docker-dev-secret-please-change-0123456789abcdef0123456789abcdef'
+      NEXT_PUBLIC_APP_URL: 'http://localhost:3000'
+      # ---- บัญชี admin ที่ seed สร้าง ----
+      ADMIN_EMAIL: 'admin@minghe.local'
+      ADMIN_PASSWORD: 'minghe-admin-2026'
+      # ---- optional: ใส่เพื่อเปิด Claude เรียบเรียง + อ่านโหงวเฮ้ง ----
+      # ANTHROPIC_API_KEY: 'sk-ant-...'
+      # ANTHROPIC_MODEL: 'claude-sonnet-5'
+      # ---- optional: token สำหรับ cron ลบรูปถ่าย (retention) ----
+      # CRON_SECRET: 'change-me'
+    ports:
+      # เปลี่ยนพอร์ตฝั่งโฮสต์ได้ด้วย WEB_PORT (เช่น WEB_PORT=3100 docker compose up)
+      - '${WEB_PORT:-3000}:3000'
+
+volumes:
+  minghe_pgdata:

@@ -78,16 +78,50 @@
 
 /* ---- Print (ใช้กับหน้ารายงาน /r/[code]) ---- */
 @media print {
+  @page {
+    margin: 14mm 12mm;
+  }
   .no-print {
     display: none !important;
   }
   body {
     background: #ffffff !important;
   }
+
+  /* ขึ้นหน้าใหม่ / อยู่หน้าเดียวกันไม่ให้แยก */
   .print-page-break {
     break-before: page;
   }
+  .print-break-after {
+    break-after: page;
+  }
   .print-avoid-break {
+    break-inside: avoid;
+  }
+
+  /* หัวข้อต้องไม่ค้างท้ายหน้า — ผูกให้ไปกับเนื้อหาที่ตามมาเสมอ
+     (แก้อาการ "หัวข้ออยู่ท้ายหน้า 1 เนื้อหาไปหน้า 2") */
+  h1,
+  h2,
+  h3,
+  h4,
+  .print-keep-with-next {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+
+  /* ย่อหน้า: กันเหลือ 1-2 บรรทัดโดดท้าย/หัวหน้า */
+  p,
+  li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* บล็อกที่ไม่ควรถูกตัดกลาง */
+  tr,
+  img,
+  svg,
+  figure {
     break-inside: avoid;
   }
 }

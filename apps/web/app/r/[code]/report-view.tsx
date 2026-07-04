@@ -33,10 +33,11 @@ function gradeTone(score: number): 'success' | 'gold' | 'warning' | 'danger' {
   return 'danger'
 }
 
-/** หัวข้อ section สไตล์เอกสาร: เลขจีน + ชื่อไทย + เส้นทอง */
+/** หัวข้อ section สไตล์เอกสาร: เลขจีน + ชื่อไทย + เส้นทอง
+ *  print-keep-with-next: ผูกหัวข้อให้ไปกับเนื้อหาที่ตามมา (ไม่ค้างท้ายหน้า) */
 function SectionHeading({ index, title }: { index: string; title: string }) {
   return (
-    <div className="mb-5 flex items-center gap-3">
+    <div className="print-keep-with-next mb-5 flex items-center gap-3">
       <span className="font-cjk text-2xl font-bold text-cinnabar">{index}</span>
       <h2 className="text-2xl font-semibold text-ink">{title}</h2>
       <span className="ml-2 h-px flex-1 bg-line" />
@@ -102,7 +103,7 @@ export function ReportView({ data, accessCode }: { data: ReportData; accessCode:
       <article className="relative z-10 mx-auto max-w-4xl px-4 py-8 print:py-0">
         {/* ---- หน้าปก ---- */}
         <header
-          className="starfield relative overflow-hidden rounded-lg bg-ink px-8 py-14 text-center print-avoid-break"
+          className="starfield relative overflow-hidden rounded-lg bg-ink px-8 py-14 text-center print-avoid-break print-break-after"
           style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
         >
           <div className="flex justify-center">
@@ -126,7 +127,7 @@ export function ReportView({ data, accessCode }: { data: ReportData; accessCode:
         </header>
 
         {/* ---- ผังปาจือ ---- */}
-        <section className="mt-12 print-page-break">
+        <section className="mt-12">
           <SectionHeading index="壹" title={`ผังปาจือ (命盘) ของ${chart.name}`} />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {chart.pillars.map((p) => (
@@ -250,7 +251,7 @@ export function ReportView({ data, accessCode }: { data: ReportData; accessCode:
         </section>
 
         {/* ---- ดัชนีสมพงษ์ ---- */}
-        <section className="mt-12 print-page-break">
+        <section className="mt-12">
           <SectionHeading index="叁" title={`ความเข้ากันกับ${org.label}`} />
           <div className="flex flex-col items-center gap-6 rounded-lg border border-line bg-cloud p-6 md:flex-row md:items-start print-avoid-break">
             <div className="shrink-0 text-center">
@@ -330,12 +331,12 @@ export function ReportView({ data, accessCode }: { data: ReportData; accessCode:
         ) : null}
 
         {/* ---- โหงวเฮ้ง ---- */}
-        <section className="mt-12 print-avoid-break">
+        <section className="mt-12">
           <SectionHeading index="伍" title="โหงวเฮ้ง (面相)" />
           {faceReading.available && faceReading.sections ? (
             <div className="space-y-4">
               {faceReading.sections.map((s, i) => (
-                <div key={i} className="rounded-md border border-line bg-cloud p-5">
+                <div key={i} className="print-avoid-break rounded-md border border-line bg-cloud p-5">
                   <p className="mb-2 font-semibold text-ink">{s.title}</p>
                   <p className="text-sm leading-relaxed text-ink-soft">{s.content}</p>
                 </div>
@@ -353,7 +354,9 @@ export function ReportView({ data, accessCode }: { data: ReportData; accessCode:
           <SectionHeading index="陸" title="บทวิเคราะห์" />
           <div className="space-y-8">
             {narrative.sections.map((s) => (
-              <div key={s.id} className="print-avoid-break">
+              // ปล่อยให้เนื้อหายาวไหลข้ามหน้าได้ตามธรรมชาติ — h3 (กฎ print) ผูกหัวข้อ
+              // ไว้กับย่อหน้าแรกอยู่แล้ว จึงไม่มีหัวข้อค้างท้ายหน้า และไม่เกิดช่องว่างใหญ่
+              <div key={s.id}>
                 <h3 className="mb-2 text-xl font-semibold text-ink">{s.title}</h3>
                 <div className="space-y-3">
                   {s.paragraphs.map((para, i) => (

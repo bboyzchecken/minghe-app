@@ -1,14 +1,16 @@
 // 命合 Mìnghé — Database Schema (ตามแผนหัวข้อ 6)
-// Dev: SQLite (ใช้ได้ทันที ไม่ต้องตั้ง DB)
-// Production: เปลี่ยน provider เป็น "postgresql" + DATABASE_URL ของ Supabase/Neon
-// (โครง schema ออกแบบให้พอร์ตไป Postgres ได้ตรงๆ)
+// ใช้ PostgreSQL ทั้ง dev และ prod — Neon free tier (https://neon.tech) รองรับได้ฟรี
+// DATABASE_URL = connection string ของ Neon (ใช้ pooled connection สำหรับ serverless)
+//
+// อยากกลับไปใช้ SQLite ตอน dev แบบไม่ต่อเน็ต? เปลี่ยน provider เป็น "sqlite"
+// และตั้ง DATABASE_URL="file:./dev.db" (โครง schema พอร์ตได้ทั้งสองฝั่ง)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
