@@ -7,6 +7,13 @@
       "runtimeArgs": ["--filter", "@minghe/web", "dev"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "minghe-proto",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@minghe/proto", "dev"],
+      "port": 4311,
+      "autoPort": true
     }
   ]
 }

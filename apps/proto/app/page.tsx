@@ -1,0 +1,301 @@
+import Link from 'next/link'
+import { ELEMENT_META, ELEMENT_ORDER } from '@/lib/brand'
+import { ElementIcon } from '@/components/element-icon'
+
+const STEPS = [
+  { n: '01', th: 'กรอกวัน–เวลาเกิด', detail: 'ของ candidate หรือของคุณเอง พร้อมจังหวัดเกิด (ปรับเวลาสุริยะจริง)' },
+  { n: '02', th: 'ระบุฝ่ายองค์กร', detail: 'ดวงผู้บริหาร / วันก่อตั้งบริษัท / ธาตุอุตสาหกรรม — เลือกได้หลายชั้น (cross-data)' },
+  { n: '03', th: 'เครื่องตั้งเสาสี่ต้น', detail: 'คำนวณปาจือแม่นระดับซินแส แล้วประเมินดัชนีสมพงษ์ (合 Index)' },
+  { n: '04', th: 'รับรายงาน + รหัสเปิด', detail: 'อ่านออนไลน์ / พิมพ์ PDF เปิดด้วยรหัสที่ปลอดภัย' },
+]
+
+export default function LandingPage() {
+  return (
+    <>
+      {/* ---------- HERO ---------- */}
+      <section className="relative overflow-hidden">
+        <div className="container-page grid gap-12 py-14 md:grid-cols-[1.05fr_0.95fr] md:py-20 md:items-center">
+          <div className="fade-up">
+            <span className="eyebrow">命合 · Mìnghé — Reveal Destiny</span>
+            <h1 className="mt-4 font-display-en text-5xl font-semibold leading-[1.03] text-ink md:text-[4.25rem]">
+              เมื่อ “คนที่ใช่”
+              <br />
+              เจอ “ที่ที่ใช่”
+            </h1>
+            <p className="mt-6 max-w-xl text-lg text-ink-soft text-balance">
+              แพลตฟอร์มวิเคราะห์ <b className="text-ink">ความสมพงษ์ระหว่างคนกับองค์กร</b> ด้วยศาสตร์ปาจือ (八字)
+              แม่นยำระดับซินแสตัวจริง — ไม่ใช่แค่ดูดวง แต่คือการเตรียมวิธีทำงานร่วมกันให้ถูกจังหวะ
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Link href="/employer/new" className="btn-primary">
+                เริ่มวิเคราะห์ candidate
+              </Link>
+              <Link href="/jobseeker/new" className="btn-ghost">
+                ฉันเป็นคนหางาน →
+              </Link>
+            </div>
+            <p className="mt-4 text-sm text-ink-soft">
+              ซื้อไปแล้ว?{' '}
+              <Link href="/r" className="font-medium text-gold hover:underline">
+                เปิดรายงานด้วยรหัส →
+              </Link>
+            </p>
+            <div className="mt-9 flex items-center gap-5">
+              {ELEMENT_ORDER.map((e) => (
+                <div key={e} className="flex flex-col items-center gap-1.5">
+                  <span
+                    className="flex h-9 w-9 items-center justify-center rounded-full"
+                    style={{ background: `${ELEMENT_META[e].color}18` }}
+                  >
+                    <ElementIcon element={e} size={20} />
+                  </span>
+                  <span className="text-[11px] text-muted">{ELEMENT_META[e].th}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* hero image + floating score card */}
+          <div className="fade-up relative">
+            <div className="relative overflow-hidden rounded-[28px] border border-line shadow-lift">
+              <img
+                src="/img/hero.jpg"
+                alt="命合 Mìnghé"
+                className="aspect-[3/4] w-full object-cover"
+                width={832}
+                height={1216}
+              />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/25 via-transparent to-transparent" />
+            </div>
+
+            {/* floating glass card */}
+            <div className="absolute -bottom-5 -left-3 w-[62%] rounded-2xl border border-white/40 bg-cloud/80 p-4 shadow-lift backdrop-blur-md sm:-left-6">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted">ดัชนีสมพงษ์</span>
+                <span className="cjk text-sm text-jade">合 · สมพงษ์ดี</span>
+              </div>
+              <div className="mt-1 flex items-end gap-2">
+                <span className="font-display-en text-4xl font-semibold text-ink">82</span>
+                <span className="mb-1 text-xs text-muted">/ 100</span>
+              </div>
+              <div className="mt-2 space-y-1.5">
+                {(['wood', 'metal', 'water'] as const).map((el, i) => (
+                  <div key={el} className="flex items-center gap-2">
+                    <ElementIcon element={el} size={12} />
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-paper-warm">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${[34, 26, 18][i]}%`, background: ELEMENT_META[el].color }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* precision badge */}
+            <div className="absolute -right-2 top-6 rounded-full border border-gold/30 bg-cloud/85 px-3 py-1.5 text-xs font-medium text-gold shadow-soft backdrop-blur-md sm:-right-4">
+              真太陽時 · เวลาสุริยะจริง
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- TWO PRODUCTS ---------- */}
+      <section className="container-page py-10 md:py-16">
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="eyebrow">สองผลิตภัณฑ์ · เครื่องคำนวณเดียว</span>
+          <h2 className="mt-3 text-3xl md:text-4xl">เปิดทั้งสองฝั่ง ดูจากมุมของคุณ</h2>
+          <p className="mt-3 text-ink-soft">
+            องค์กรมองหาคนที่เข้ากับทีมและวัฒนธรรม · คนทำงานมองหาที่ที่ส่งเสริมดวงตัวเอง — ใช้ engine ปาจือชุดเดียวกัน
+          </p>
+        </div>
+        <div className="mt-10 grid gap-6 md:grid-cols-2">
+          <ProductCard
+            img="/img/employer.jpg"
+            tag="สำหรับองค์กร"
+            title="Employer"
+            desc="วิเคราะห์ความเข้ากันของ candidate กับผู้บริหาร ทีม และธาตุองค์กร พร้อม Team Roster และ Profile Memory"
+            points={['โควตา 6 candidate/สัปดาห์', 'วิเคราะห์รวมทั้งทีม (cross-data)', 'ซินแสตรวจทานแพ็กพรีเมียม']}
+            price="699 บาท/เดือน"
+            href="/employer"
+            cta="ดูฝั่งองค์กร"
+            accent="metal"
+          />
+          <ProductCard
+            img="/img/jobseeker.jpg"
+            tag="สำหรับคนทำงาน"
+            title="Job Seeker"
+            desc="เช็กก่อนตัดสินใจ — ดวงคุณสมพงษ์กับบริษัทที่กำลังสมัครไหม จากวันก่อตั้ง ธาตุอุตสาหกรรม และทิศที่ตั้ง"
+            points={['199 บาท / 1 บริษัท', 'หรือ 399/เดือน (3 บริษัท/สัปดาห์)', 'กรอกข้อมูลบริษัทเองได้ทันที']}
+            price="เริ่ม 199 บาท"
+            href="/jobseeker"
+            cta="ดูฝั่งคนทำงาน"
+            accent="water"
+          />
+        </div>
+      </section>
+
+      {/* ---------- HOW IT WORKS ---------- */}
+      <section className="container-page py-12 md:py-16">
+        <div className="rounded-[28px] border border-line bg-card p-8 shadow-card md:p-12">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <span className="eyebrow">ขั้นตอน</span>
+              <h2 className="mt-2 text-3xl">ทำงานอย่างไร</h2>
+            </div>
+            <p className="max-w-md text-sm text-ink-soft">
+              เครื่องคำนวณ (engine) ทำหน้าที่ “คำนวณให้แม่น” — การเรียบเรียงภาษาทำหน้าที่ “อธิบายให้เข้าใจ” แยกกันชัดเจน
+            </p>
+          </div>
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {STEPS.map((s) => (
+              <div key={s.n} className="relative rounded-2xl border border-line bg-cloud p-5">
+                <span className="font-display-en text-3xl font-semibold text-gold/70">{s.n}</span>
+                <h3 className="mt-2 text-lg">{s.th}</h3>
+                <p className="mt-1.5 text-sm text-ink-soft">{s.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- FIVE ELEMENTS ---------- */}
+      <section className="container-page py-12 md:py-16">
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="eyebrow">ห้าธาตุ · 五行</span>
+          <h2 className="mt-3 text-3xl md:text-4xl">พื้นดวงของคุณคือธาตุอะไร</h2>
+          <p className="mt-3 text-ink-soft">ทุกคนมีพื้นดวง (ก้านวัน / 日主) เป็นหนึ่งในห้าธาตุ — เป็นจุดเริ่มของการอ่านความเข้ากัน</p>
+        </div>
+        <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {ELEMENT_ORDER.map((e) => {
+            const m = ELEMENT_META[e]
+            return (
+              <div
+                key={e}
+                className="group overflow-hidden rounded-2xl border border-line bg-card shadow-soft transition hover:shadow-card"
+              >
+                <div className="relative aspect-[4/3] overflow-hidden">
+                  <img
+                    src={`/img/el-${e}.jpg`}
+                    alt={m.th}
+                    loading="lazy"
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                  />
+                  <span className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-cloud/85 backdrop-blur-sm">
+                    <ElementIcon element={e} size={18} />
+                  </span>
+                </div>
+                <div className="p-4 text-center">
+                  <div className="flex items-baseline justify-center gap-2">
+                    <span className="cjk text-lg" style={{ color: m.color }}>
+                      {m.cn}
+                    </span>
+                    <span className="font-display-en text-lg font-semibold" style={{ color: m.color }}>
+                      {m.en}
+                    </span>
+                  </div>
+                  <div className="text-sm font-medium text-ink">คน{m.th}หยาง</div>
+                  <p className="mt-1 text-xs text-ink-soft">{m.vibe}</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* ---------- CTA ---------- */}
+      <section className="container-page py-14">
+        <div className="relative overflow-hidden rounded-[28px] bg-ink px-8 py-16 text-center text-paper md:px-16">
+          <div className="starfield-soft pointer-events-none absolute inset-0 opacity-40" />
+          <div className="relative">
+            <span className="cjk text-3xl text-gold-soft">命合</span>
+            <h2 className="mt-3 text-3xl text-paper md:text-4xl">พร้อมดูว่าดวงใครเข้ากับที่ไหน?</h2>
+            <p className="mx-auto mt-3 max-w-xl text-paper/75">
+              ทดลองสร้างรายงานตัวอย่างได้ทันที — เวอร์ชันสาธิตนี้คำนวณปาจือจริงในเบราว์เซอร์ ไม่ต้องสมัคร ไม่ต้องจ่าย
+            </p>
+            <div className="mt-4 flex justify-center gap-3">
+              {ELEMENT_ORDER.map((e) => (
+                <ElementIcon key={e} element={e} size={18} color={ELEMENT_META[e].color} />
+              ))}
+            </div>
+            <div className="mt-7 flex flex-wrap justify-center gap-3">
+              <Link href="/employer/new" className="btn-primary">
+                เริ่มวิเคราะห์
+              </Link>
+              <Link href="/report" className="btn border border-paper/30 text-paper hover:bg-paper/10">
+                ดูรายงานตัวอย่าง
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  )
+}
+
+function ProductCard({
+  img,
+  tag,
+  title,
+  desc,
+  points,
+  price,
+  href,
+  cta,
+  accent,
+}: {
+  img: string
+  tag: string
+  title: string
+  desc: string
+  points: string[]
+  price: string
+  href: string
+  cta: string
+  accent: 'metal' | 'water'
+}) {
+  const color = ELEMENT_META[accent].color
+  return (
+    <Link
+      href={href}
+      className="group flex flex-col overflow-hidden rounded-[28px] border border-line bg-card shadow-card transition hover:shadow-lift"
+    >
+      <div className="relative aspect-[16/10] overflow-hidden">
+        <img
+          src={img}
+          alt={title}
+          loading="lazy"
+          className="h-full w-full object-cover object-top transition duration-500 group-hover:scale-[1.04]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-ink/40 via-ink/5 to-transparent" />
+        <span
+          className="absolute left-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-cloud/85 px-3 py-1 text-xs font-medium backdrop-blur-sm"
+          style={{ color }}
+        >
+          <ElementIcon element={accent} size={14} /> {tag}
+        </span>
+        <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between">
+          <h3 className="font-display-en text-4xl font-semibold text-paper drop-shadow">{title}</h3>
+          <span className="rounded-full bg-cloud/90 px-3 py-1 text-sm font-medium" style={{ color }}>
+            {price}
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-1 flex-col p-7">
+        <p className="text-sm text-ink-soft">{desc}</p>
+        <ul className="mt-4 space-y-2">
+          {points.map((p) => (
+            <li key={p} className="flex items-start gap-2 text-sm text-ink-soft">
+              <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full" style={{ background: color }} />
+              {p}
+            </li>
+          ))}
+        </ul>
+        <span className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-gold transition group-hover:gap-2">
+          {cta} →
+        </span>
+      </div>
+    </Link>
+  )
+}
