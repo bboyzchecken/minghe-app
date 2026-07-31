@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ELEMENT_META, ELEMENT_ORDER } from '@/lib/brand'
 import { ElementIcon } from '@/components/element-icon'
+import { ElementGallery } from '@/components/element-gallery'
 
 const STEPS = [
   { n: '01', th: 'กรอกวัน–เวลาเกิด', detail: 'ของ candidate หรือของคุณเอง พร้อมจังหวัดเกิด (ปรับเวลาสุริยะจริง)' },
@@ -59,9 +60,9 @@ export default function LandingPage() {
           <div className="fade-up relative">
             <div className="relative overflow-hidden rounded-[28px] border border-line shadow-lift">
               <img
-                src="/img/hero.jpg"
+                src="/img/hero-man.jpg"
                 alt="命合 Mìnghé"
-                className="aspect-[3/4] w-full object-cover"
+                className="aspect-[3/4] w-full object-cover object-top"
                 width={832}
                 height={1216}
               />
@@ -167,40 +168,31 @@ export default function LandingPage() {
           <h2 className="mt-3 text-3xl md:text-4xl">พื้นดวงของคุณคือธาตุอะไร</h2>
           <p className="mt-3 text-ink-soft">ทุกคนมีพื้นดวง (ก้านวัน / 日主) เป็นหนึ่งในห้าธาตุ — เป็นจุดเริ่มของการอ่านความเข้ากัน</p>
         </div>
-        <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          {ELEMENT_ORDER.map((e) => {
-            const m = ELEMENT_META[e]
-            return (
-              <div
-                key={e}
-                className="group overflow-hidden rounded-2xl border border-line bg-card shadow-soft transition hover:shadow-card"
-              >
-                <div className="relative aspect-[4/3] overflow-hidden">
-                  <img
-                    src={`/img/el-${e}.jpg`}
-                    alt={m.th}
-                    loading="lazy"
-                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                  />
-                  <span className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-cloud/85 backdrop-blur-sm">
-                    <ElementIcon element={e} size={18} />
-                  </span>
-                </div>
-                <div className="p-4 text-center">
-                  <div className="flex items-baseline justify-center gap-2">
-                    <span className="cjk text-lg" style={{ color: m.color }}>
-                      {m.cn}
-                    </span>
-                    <span className="font-display-en text-lg font-semibold" style={{ color: m.color }}>
-                      {m.en}
-                    </span>
-                  </div>
-                  <div className="text-sm font-medium text-ink">คน{m.th}หยาง</div>
-                  <p className="mt-1 text-xs text-ink-soft">{m.vibe}</p>
-                </div>
-              </div>
-            )
-          })}
+        <div className="mt-10">
+          <ElementGallery />
+        </div>
+      </section>
+
+      {/* ---------- BRAND BAND ---------- */}
+      <section className="container-page py-8 md:py-12">
+        <div className="relative overflow-hidden rounded-[28px] border border-line shadow-card">
+          <img
+            src="/img/brand-band.jpg"
+            alt="命合 Mìnghé — ห้าธาตุ"
+            loading="lazy"
+            className="h-56 w-full object-cover md:h-72"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-paper/95 via-paper/55 to-transparent" />
+          <div className="absolute inset-0 flex flex-col justify-center px-8 md:px-14">
+            <div className="flex items-baseline gap-2.5">
+              <span className="cjk text-3xl text-gold md:text-4xl">命合</span>
+              <span className="font-display-en text-3xl font-semibold text-gold md:text-4xl">Ming He</span>
+            </div>
+            <p className="mt-1 font-script text-xl text-terracotta md:text-2xl">สมพงษ์คนกับองค์กร</p>
+            <p className="mt-2 max-w-sm text-sm text-ink-soft">
+              ห้าธาตุที่ต่างกันไม่ใช่เรื่องดีหรือร้าย — แต่คือการรู้จังหวะที่จะเสริมกัน
+            </p>
+          </div>
         </div>
       </section>
 
