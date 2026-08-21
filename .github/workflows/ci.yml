@@ -1,0 +1,90 @@
+# CI — รันทุก PR และทุก push เข้า main
+# job `web` และ `api` เป็น required status check ของ ruleset ป้องกัน main (.github/rulesets/main.json)
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # อ่านเวอร์ชันจาก packageManager ใน package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck (apps/app + packages)
+        run: pnpm lint
+      - name: Unit tests (packages/core, packages/report)
+        run: pnpm test
+      - name: Build static export (live mode, production API URL)
+        env:
+          MINGHE_MODE: live
+          MINGHE_API_BASE_URL: ${{ vars.API_BASE_URL || 'https://api.minghe.work' }}
+          MINGHE_GOOGLE_LOGIN_ENABLED: 'false'
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: pnpm --filter @minghe/app build
+      - name: Upload build artifact (ใช้ตรวจผลได้จากหน้า run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-out
+          path: apps/app/out
+          retention-days: 3
+
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "ไฟล์ยังไม่ผ่าน gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+  docker-images:
+    name: docker-images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build API image (ไม่ push)
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          push: false
+          build-args: COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - name: Build web image (ไม่ push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/app/Dockerfile
+          push: false
+          build-args: |
+            MINGHE_MODE=live
+            MINGHE_API_BASE_URL=/backend
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max

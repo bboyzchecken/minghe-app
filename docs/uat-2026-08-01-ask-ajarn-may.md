@@ -89,7 +89,7 @@ feedback บอกว่า *"หลักการถูกต้องแล�
 
 | เรื่อง | ข้อสรุป |
 |---|---|
-| แอปตัวจริง | สร้าง `apps/app` ใหม่ (Next 15 + TanStack Query) · Go API เป็นเจ้าของข้อมูลเจ้าเดียว · `apps/proto` และ Prisma ใน `apps/web` จะถูกปลดระวาง |
+| แอปตัวจริง | `apps/app` (Next 15 + TanStack Query) — ได้จากการเปลี่ยนชื่อ `apps/app` แล้วเติม TanStack Query ไม่เขียนใหม่ · Go API เป็นเจ้าของข้อมูลเจ้าเดียว · Prisma ใน `apps/web` จะถูกปลดระวาง |
 | Mock mode | ครอบทุก endpoint ทำงานเหมือนต่อจริง ปิดแล้วต่อ Go ทันที |
 | Payment gateway | GB Prime Pay |
 | Login | Go API ถือ auth ทั้งหมด · อีเมลอะไรก็สมัครได้ · ยืนยันอีเมลก่อนใช้ · บัญชีเดียวสลับสองโหมด · บังคับ login ก่อนกดจ่าย |

@@ -1,6 +1,7 @@
-# บังคับ LF สำหรับสคริปต์เชลล์ — กัน CRLF จาก Windows ทำ Docker entrypoint พัง
+# บังคับ LF สำหรับสคริปต์เชลล์และไฟล์ config ของ container — กัน CRLF จาก Windows ทำ entrypoint พัง
 *.sh text eol=lf
-docker/entrypoint.sh text eol=lf
+*.conf text eol=lf
+Caddyfile text eol=lf
 
 # ปกติให้ normalize เป็น LF ใน repo
 * text=auto eol=lf

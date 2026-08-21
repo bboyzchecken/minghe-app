@@ -2,7 +2,7 @@
 
 > ที่มา: `D:\kami\MingHe - Google สไลด์.pdf` (15 หน้า) — feedback หลังลองเล่นเวอร์ชัน 1 สิงหาคม 2026
 > สถานะเอกสาร: **ยังไม่เริ่มโค้ด** — เอกสารนี้ใช้เพื่อ (1) แตกข้อ feedback (2) จัดประเภท (3) ประเมินความยากง่าย (4) ระบุว่าข้อไหน prompt ได้เลย ข้อไหนต้องเติมรายละเอียดก่อน
-> เวอร์ชันที่ถูกรีวิว: จากเนื้อหาสไลด์ (กล่องสีทอง / ฉันเป็นคนหางาน / การ์ดสองผลิตภัณฑ์ / ฟอร์มจังหวัดเกิด) ตรงกับ **`apps/proto`** ซึ่งเป็น static demo ไม่มี API
+> เวอร์ชันที่ถูกรีวิว: จากเนื้อหาสไลด์ (กล่องสีทอง / ฉันเป็นคนหางาน / การ์ดสองผลิตภัณฑ์ / ฟอร์มจังหวัดเกิด) ตรงกับ **`apps/app`** ซึ่งเป็น static demo ไม่มี API
 
 ---
 
@@ -12,7 +12,7 @@
 
 | # | ข้อสรุป |
 |---|---|
-| **Q0-1** | **สร้าง `apps/app` ใหม่** — Next 15 (App Router) + **TanStack Query** เป็นชั้นคุยกับ **Go API** (`apps/api`) · มี **mock mode ครอบทุก endpoint** ที่ทำงานเหมือนต่อจริงทุกอย่าง ต่างแค่ข้อมูลเป็นของปลอม · ปิด mock = ยิงเข้า Go ทันที · `apps/proto` เป็น mock ล้วนจะถูกลบเมื่อ `apps/app` ทำงานแทนได้ครบ |
+| **Q0-1** | **แอปตัวจริงคือ `apps/app`** — Next 15 (App Router) + **TanStack Query** เป็นชั้นคุยกับ **Go API** (`apps/api`) · มี **mock mode ครอบทุก endpoint** ที่ทำงานเหมือนต่อจริงทุกอย่าง ต่างแค่ข้อมูลเป็นของปลอม · ปิด mock = ยิงเข้า Go ทันที<br>**วิธีไปถึง**: เปลี่ยนชื่อ `apps/app` → `apps/app` แล้วเติม TanStack Query ทับของเดิม ไม่เขียนใหม่จากศูนย์ — เพราะ proto ไม่ได้เป็น mock ล้วนแล้ว มันมี login จริงกับ Go API, บัญชีองค์กร + role และ Admin Console อยู่ในนั้น (ดู A-01…A-04) |
 | **Q0-1b** | **Go API เป็นเจ้าของข้อมูลเจ้าเดียว** — เลิกใช้ Prisma และ API route ฝั่ง Next ทั้งหมด · `apps/web` เก็บไว้เป็น reference ก่อนลบ · เหตุผล: มีที่เก็บข้อมูลสองที่ = ข้อมูลแตกกัน และตอนทำ PDPA ต้องไล่ลบสองที่ |
 | **Q0-2** | ตอบไปในตัวโดย Q0-1 — **ได้ทั้งสองอย่างจากโค้ดชุดเดียว**: เปิด mock ให้ลูกค้าตรวจ user process ตาม Note ในสไลด์ · ปิด mock คือของจริงที่ขายได้ ไม่ต้องเขียนสองรอบ |
 | **Q0-3** | **GB Prime Pay** — บังคับให้เว็บแสดงข้อมูลผู้ขาย + เงื่อนไขการใช้บริการ + นโยบายคืนเงิน/ยกเลิก + นโยบายความเป็นส่วนตัว + ราคาเป็นบาทชัดเจน (ตรงกับเอกสาร 4 ฉบับใน F-01 พอดี) · รับทั้งนิติบุคคลและบุคคลธรรมดา · รองรับบัตร + QR PromptPay |
@@ -25,12 +25,20 @@
 
 **งานใหม่ที่เกิดจากข้อสรุปนี้** (ไม่ได้อยู่ใน feedback เดิม แต่ต้องทำก่อน)
 
+**วิธีที่เลือก: เปลี่ยนชื่อ `apps/app` → `apps/app` แล้วเติม TanStack Query ทับของเดิม** — ไม่เขียนใหม่จากศูนย์
+ปลายทางเหมือนกันทุกข้อ (ชื่อ `apps/app` · Next + TanStack Query · Go เป็นเจ้าของข้อมูล · ไม่เหลือคำว่า proto)
+แต่ไม่ต้องทำ Admin Console, role, session ใหม่
+
 | ID | งาน | ยาก-ง่าย |
 |---|---|---|
-| **A-01** | ตั้ง `apps/app` — Next 15 + Tailwind + TanStack Query + โครง route ตาม proto | S |
-| **A-02** | ชั้น API client เดียวที่มีสองหน้า mock/live ครบทุก endpoint (ต่อยอดจาก [`apps/proto/lib/api/`](apps/proto/lib/api/index.ts) ที่มีโครงอยู่แล้ว) | M |
-| **A-03** | ย้าย UI/copy ที่ผ่าน UAT รอบล่าสุดจาก `proto` มา `apps/app` | S–M |
-| **A-04** | ปลดระวาง `apps/proto` และ Prisma ใน `apps/web` (ทำหลัง `apps/app` แทนได้ครบ) | S |
+| **A-01** | `git mv apps/app apps/app` + เปลี่ยนชื่อ package (`@minghe/app` → `@minghe/app`) + อัปเดต turbo / tsconfig / สคริปต์ dev · เก็บประวัติ git ของทุกไฟล์ไว้ | S |
+| **A-02** | เพิ่ม TanStack Query — `QueryClientProvider` + แปลงการเรียก [`lib/api`](apps/app/lib/api/index.ts) ในหน้าจอทั้งหมดให้ผ่าน `useQuery` / `useMutation` · ตัว mock/live client เดิมไม่ต้องแก้ ยังเป็น interface เดียวเหมือนเดิม | M |
+| **A-03** | ตรวจให้ mock mode ครอบ**ทุก** endpoint จริงตามที่ตัดสิน (auth · order · payment · report · memory) แล้วทดสอบสลับโหมดทั้งสองทาง | S–M |
+| **A-04** | ปลดระวาง Prisma และ API route ใน `apps/web` ให้ Go API เป็นเจ้าของข้อมูลเจ้าเดียว | S |
+
+**✅ A-01…A-04 ทำเสร็จแล้ว 22 ส.ค. 2026** — `apps/proto` → `apps/app` (เก็บประวัติ git) · TanStack Query ครอบทุกหน้า (`lib/queries.ts`) ·
+mock ครอบทุก method รวม OTP/สมัครสมาชิก · ลบ `apps/web` + `packages/db` แล้ว · เพิ่ม `/register` + `/forgot-password` (F-02 ส่วนอีเมล) ·
+ทั้งระบบรันด้วย `docker compose up --build -d` (MySQL + Go API + nginx) · CI/CD: Cloudflare Pages + Lightsail ผูกกับ `main` (ดู [deploy.md](deploy.md))
 
 ---
 
@@ -73,7 +81,7 @@
 - **ประเภท**: ⚖️ Legal + 🔧 Function (ต้องมีหน้าเว็บจริง + ลิงก์ใน footer)
 - **ยาก-ง่าย**: **M** (โครงหน้าเว็บ = S / เนื้อหากฎหมาย = ต้องมีคนตรวจ)
 - **ความพร้อม**: 🟡 — โครงและกติกาชัดแล้ว เหลือ 3 ข้อเท็จจริงที่ต้องได้จากเจ้าของธุรกิจ
-- **สถานะปัจจุบัน**: `apps/proto` มีหน้า stub `/legal/{terms,privacy,refund,cookies}` จองไว้แล้ว (Wave 1) · `apps/web` มี privacy/terms ฉบับเก่าใช้เป็นตั้งต้นได้
+- **สถานะปัจจุบัน**: `apps/app` มีหน้า stub `/legal/{terms,privacy,refund,cookies}` จองไว้แล้ว (Wave 1) · `apps/web` มี privacy/terms ฉบับเก่าใช้เป็นตั้งต้นได้
 - **ตัดสินแล้ว**
   - Gateway = **GB Prime Pay** → ต้องมีครบ 4 ฉบับ + แสดงข้อมูลผู้ขายและราคาเป็นบาทชัดเจน
   - **Retention**: เก็บตราบเท่าที่บัญชียังใช้งาน · ลบข้อมูลส่วนบุคคลภายใน **90 วัน** หลังผู้ใช้ขอลบบัญชี · เอกสารธุรกรรมเก็บ **5 ปี** ตามกฎหมายบัญชี
@@ -118,7 +126,7 @@
 - **ประเภท**: 🎨 Cosmetic (แต่ผูกกับ F-02)
 - **ยาก-ง่าย**: **XS**
 - **ความพร้อม**: 🟢 (ถ้าทำเป็น UI อย่างเดียว) / 🟡 (ถ้าต้องต่อ auth จริง)
-- **จุดแก้**: [`apps/proto/components/site-header.tsx:36`](apps/proto/components/site-header.tsx#L36) — เพิ่ม `<Link href="/login">เข้าสู่ระบบ</Link>` ไว้หน้าปุ่ม `.btn-primary` "เริ่มวิเคราะห์" (ทั้ง desktop nav และ mobile menu บรรทัด ~60)
+- **จุดแก้**: [`apps/app/components/site-header.tsx:36`](apps/app/components/site-header.tsx#L36) — เพิ่ม `<Link href="/login">เข้าสู่ระบบ</Link>` ไว้หน้าปุ่ม `.btn-primary` "เริ่มวิเคราะห์" (ทั้ง desktop nav และ mobile menu บรรทัด ~60)
 
 #### F-05 · Login สำหรับ "บริษัท" เพื่อเก็บข้อมูล
 - **ที่มา**: หน้า 13 ข้อ 1
@@ -139,7 +147,7 @@
 - **ประเภท**: 🔧 Function
 - **ยาก-ง่าย**: **S**
 - **ความพร้อม**: 🟢 (UI + validation) / 🟡 (ถ้าต้องเก็บ audit log ว่ายอมรับตอนไหน เวอร์ชันไหน)
-- **จุดแก้**: ขั้นตอนก่อนชำระใน [`apps/proto/app/employer/new/page.tsx`](apps/proto/app/employer/new/page.tsx) และ [`apps/proto/app/jobseeker/new/page.tsx`](apps/proto/app/jobseeker/new/page.tsx)
+- **จุดแก้**: ขั้นตอนก่อนชำระใน [`apps/app/app/employer/new/page.tsx`](apps/app/app/employer/new/page.tsx) และ [`apps/app/app/jobseeker/new/page.tsx`](apps/app/app/jobseeker/new/page.tsx)
 - **หมายเหตุ**: ต้องรอ F-01 ให้มี URL ของ policy จริงก่อน ไม่งั้นลิงก์ตาย
 
 ---
@@ -152,7 +160,7 @@
 - **ประเภท**: 🔧 Function + 🎨 Cosmetic
 - **ยาก-ง่าย**: **S–M**
 - **ความพร้อม**: 🟢
-- **สาเหตุจริง**: โค้ดใช้ `<input type="date">` ([`components/forms.tsx:99`](apps/proto/components/forms.tsx#L99), [`employer/new/page.tsx:157`](apps/proto/app/employer/new/page.tsx#L157), [`jobseeker/new/page.tsx:129`](apps/proto/app/jobseeker/new/page.tsx#L129)) — **native date input จะแสดงลำดับตาม locale ของเบราว์เซอร์ ไม่ใช่ตามที่เรากำหนด** ถ้าเครื่องเป็น en-US ก็จะขึ้น MM/DD/YYYY เสมอ
+- **สาเหตุจริง**: โค้ดใช้ `<input type="date">` ([`components/forms.tsx:99`](apps/app/components/forms.tsx#L99), [`employer/new/page.tsx:157`](apps/app/app/employer/new/page.tsx#L157), [`jobseeker/new/page.tsx:129`](apps/app/app/jobseeker/new/page.tsx#L129)) — **native date input จะแสดงลำดับตาม locale ของเบราว์เซอร์ ไม่ใช่ตามที่เรากำหนด** ถ้าเครื่องเป็น en-US ก็จะขึ้น MM/DD/YYYY เสมอ
 - **ทางแก้ที่แนะนำ**: เปลี่ยนเป็น custom text input 3 ช่อง (DD / MM / YYYY) หรือ masked input + helper text `ตัวอย่าง: 31/01/1990` แล้วแปลงเป็น ISO ภายใน — จะได้ผลเหมือนกันทุกเครื่อง ทุก locale
 - **ขอบเขต**: วันเกิดบุคคล, วันก่อตั้งบริษัท, ทุกที่ที่โชว์วันที่ในรายงาน — ควรทำ component กลางตัวเดียวใช้ทั้งโปรเจกต์
 
@@ -162,7 +170,7 @@
 - **ประเภท**: 🔧 Function (กระทบ core engine)
 - **ยาก-ง่าย**: **M–L**
 - **ความพร้อม**: 🟢 — **ปลดบล็อกแล้ว** เพราะ Q0-1 ตัดสินให้มี Go API
-- **สถานะปัจจุบัน**: ใช้ `ProvinceSelect` จาก `THAI_PROVINCES` ([`components/forms.tsx:31`](apps/proto/components/forms.tsx#L31)) และ `packages/core/src/solar-time.ts` คำนวณเวลาสุริยะจากจังหวัด
+- **สถานะปัจจุบัน**: ใช้ `ProvinceSelect` จาก `THAI_PROVINCES` ([`components/forms.tsx:31`](apps/app/components/forms.tsx#L31)) และ `packages/core/src/solar-time.ts` คำนวณเวลาสุริยะจากจังหวัด
 - **ข้อเท็จจริงทางเทคนิค**: ลิงก์ Google Maps มีหลายรูปแบบ — `maps.app.goo.gl/xxxx` (ย่อ ต้อง resolve redirect ฝั่ง server เพราะเบราว์เซอร์ติด CORS), `google.com/maps/@13.7,100.5,15z`, `?q=lat,lng`, `/place/.../@lat,lng` → ตัวแกะลิงก์ต้องอยู่ใน Go API
 - **ตัดสินแล้ว**
   1. **แกะไม่สำเร็จ → fallback เป็น dropdown จังหวัดเดิม** + บอกผู้ใช้ว่าความละเอียดลดลงเล็กน้อย (ไม่ปล่อยให้ทางตัน)
@@ -175,7 +183,7 @@
 - **ประเภท**: 🎨 Cosmetic (copy)
 - **ยาก-ง่าย**: **XS**
 - **ความพร้อม**: 🟡 — **ยังบล็อกด้วยข้อเดียว** คือคำว่า "ธาตุโปรด" ที่ต้นฉบับสั่งเองให้ recheck กับ อ.เม
-- **จุดแก้**: [`employer/new/page.tsx:167`](apps/proto/app/employer/new/page.tsx#L167), [`jobseeker/new/page.tsx:133`](apps/proto/app/jobseeker/new/page.tsx#L133) — ใส่ผ่าน prop `hint` ของ `<Field>` ที่มีอยู่แล้ว
+- **จุดแก้**: [`employer/new/page.tsx:167`](apps/app/app/employer/new/page.tsx#L167), [`jobseeker/new/page.tsx:133`](apps/app/app/jobseeker/new/page.tsx#L133) — ใส่ผ่าน prop `hint` ของ `<Field>` ที่มีอยู่แล้ว
 - **ตัดสินแล้ว**: ใช้ **รายการประเภทธุรกิจเดิม** ก่อน เติมแค่คำอธิบาย — ไม่รอชุดใหม่ที่แมป 5 ธาตุ (ถ้า อ.เม ให้มาทีหลังค่อยเปลี่ยน)
 - **ยังรอ 🔑**: คำที่ อ.เม ยืนยัน (A1) — ตัวเลือกที่เตรียมไว้ `ธาตุโปรด` / `ธาตุที่ส่งเสริมดวงคุณ` / `ธาตุอุปถัมภ์` / `ธาตุที่ใช่ (用神)`
 
@@ -198,14 +206,14 @@
 - **ยาก-ง่าย**: **XS** (หลังได้ไฟล์)
 - **ความพร้อม**: 🔴 **บล็อกด้วย asset** — ยังไม่มีไฟล์โลโก้ในโปรเจกต์
 - **ต้องการ**: ไฟล์โลโก้ (ควรเป็น SVG; ถ้ามี PNG ขอ 2x/3x) + เวอร์ชันพื้นสว่าง/พื้นเข้ม + favicon
-- **จุดแก้**: [`apps/proto/components/logo.tsx`](apps/proto/components/logo.tsx) (24 บรรทัด — ตอนนี้เป็น logo ที่วาดด้วยโค้ด)
+- **จุดแก้**: [`apps/app/components/logo.tsx`](apps/app/components/logo.tsx) (24 บรรทัด — ตอนนี้เป็น logo ที่วาดด้วยโค้ด)
 
 #### F-12 · แก้ข้อความในกล่องสีทองเป็น "ฉันเป็นองค์กร"
 - **ที่มา**: หน้า 5
 - **ประเภท**: 🎨 Cosmetic
 - **ยาก-ง่าย**: **XS**
 - **ความพร้อม**: 🟢
-- **จุดแก้**: [`apps/proto/app/page.tsx:31`](apps/proto/app/page.tsx#L31) — ปุ่ม `.btn-primary` ปัจจุบันคือ `"เริ่มวิเคราะห์ candidate"` → เปลี่ยนเป็น `"ฉันเป็นองค์กร"` (จะได้เข้าคู่กับปุ่มข้าง ๆ `"ฉันเป็นคนหางาน →"` บรรทัด 34)
+- **จุดแก้**: [`apps/app/app/page.tsx:31`](apps/app/app/page.tsx#L31) — ปุ่ม `.btn-primary` ปัจจุบันคือ `"เริ่มวิเคราะห์ candidate"` → เปลี่ยนเป็น `"ฉันเป็นองค์กร"` (จะได้เข้าคู่กับปุ่มข้าง ๆ `"ฉันเป็นคนหางาน →"` บรรทัด 34)
 
 #### F-13 · แก้ headline + subcopy หน้าแรก (ชุดที่ 1)
 - **ที่มา**: หน้า 5
@@ -213,7 +221,7 @@
 - **ประเภท**: 🎨 Cosmetic (copy)
 - **ยาก-ง่าย**: **XS**
 - **ความพร้อม**: 🟢 (คำครบ)
-- **จุดแก้**: [`apps/proto/app/page.tsx:26-29`](apps/proto/app/page.tsx#L26)
+- **จุดแก้**: [`apps/app/app/page.tsx:26-29`](apps/app/app/page.tsx#L26)
 
 #### F-14 · แก้ headline + subcopy หน้าแรก (ชุดที่ 2)
 - **ที่มา**: หน้า 6
@@ -231,7 +239,7 @@
 - **ประเภท**: 🎨 Cosmetic (copy)
 - **ยาก-ง่าย**: **XS**
 - **ความพร้อม**: 🟢
-- **จุดแก้**: [`apps/proto/app/page.tsx:117-137`](apps/proto/app/page.tsx#L117) (`<ProductCard>` สองใบ)
+- **จุดแก้**: [`apps/app/app/page.tsx:117-137`](apps/app/app/page.tsx#L117) (`<ProductCard>` สองใบ)
 
 #### F-16 · ภาพ hero ที่ represent ครบทุกธาตุ
 - **ที่มา**: หน้า 5
@@ -240,7 +248,7 @@
 - **ยาก-ง่าย**: **S** (ถ้าได้ภาพมา) / **M** (ถ้าให้ผมทำเป็น composition ในโค้ด)
 - **ความพร้อม**: 🔴
 - **ต้องตัดสินใจ**: เป็นภาพถ่าย/ภาพเจนใหม่ 1 ภาพที่มีครบ 5 ธาตุ หรือเป็น **visual element ในโค้ด** (มี `components/element-gallery.tsx` 129 บรรทัด กับ `element-icon.tsx` อยู่แล้ว — อาจขยายอันนี้แทนได้)
-- **หมายเหตุ**: ปัจจุบัน hero ใช้ `/img/hero-man.jpg` ([`page.tsx:63`](apps/proto/app/page.tsx#L63))
+- **หมายเหตุ**: ปัจจุบัน hero ใช้ `/img/hero-man.jpg` ([`page.tsx:63`](apps/app/app/page.tsx#L63))
 
 #### F-17 · รูปคนต้องสื่อว่าเป็น "นายจ้าง" และ "คนหางาน" ชัดขึ้น + มีบริบทเรื่องงาน
 - **ที่มา**: หน้า 6
@@ -258,14 +266,14 @@
 - **ยาก-ง่าย**: **S**
 - **ความพร้อม**: 🔴 **ขาดเนื้อหา — prompt ไม่ได้**
 - **ต้องการ**: คำอธิบายจริงของแต่ละขั้น 4 ก้อน
-- **คำถาม**: section นี้มา**แทน** section "HOW IT WORKS" ปัจจุบัน (`STEPS` 4 ข้อ ที่ [`page.tsx:6-11`](apps/proto/app/page.tsx#L6)) หรือ**เพิ่ม**เข้ามาอีกอัน?
+- **คำถาม**: section นี้มา**แทน** section "HOW IT WORKS" ปัจจุบัน (`STEPS` 4 ข้อ ที่ [`page.tsx:6-11`](apps/app/app/page.tsx#L6)) หรือ**เพิ่ม**เข้ามาอีกอัน?
 
 #### F-19 · แสดงอีเมลติดต่อ info@minghe.work
 - **ที่มา**: หน้า 10
 - **ประเภท**: 🎨 Cosmetic
 - **ยาก-ง่าย**: **XS**
 - **ความพร้อม**: 🟢
-- **จุดแก้**: [`apps/proto/components/site-footer.tsx`](apps/proto/components/site-footer.tsx) (+ หน้า policy ตาม F-01)
+- **จุดแก้**: [`apps/app/components/site-footer.tsx`](apps/app/components/site-footer.tsx) (+ หน้า policy ตาม F-01)
 
 ---
 
@@ -303,7 +311,7 @@
 - **ประเภท**: ✨ Feature
 - **ยาก-ง่าย**: **XL**
 - **ความพร้อม**: 🔴
-- **สถานะปัจจุบัน**: มี `apps/proto/app/jobseeker/dashboard/page.tsx` (96 บรรทัด) แยกจาก employer อยู่แล้ว → **โครงแยกผ่านแล้ว** ที่ขาดคือ "เนื้อหาเชิงพยากรณ์"
+- **สถานะปัจจุบัน**: มี `apps/app/app/jobseeker/dashboard/page.tsx` (96 บรรทัด) แยกจาก employer อยู่แล้ว → **โครงแยกผ่านแล้ว** ที่ขาดคือ "เนื้อหาเชิงพยากรณ์"
 - **ขึ้นกับ**: F-21 (ต้องมี engine 大運/流年 ก่อน)
 - **ต้องตัดสินใจ + ระวัง**:
   1. "จะอยู่นานแค่ไหน" จะตอบเป็นช่วงปี ("จังหวะดี 2026–2029") หรือเป็นตัวเลขเดียว?
@@ -419,10 +427,10 @@
 
 | ID | หัวข้อ | ยาก-ง่าย | ความพร้อม |
 |---|---|---|---|
-| A-01 | ตั้ง `apps/app` (Next 15 + TanStack Query) | S | 🟢 |
-| A-02 | API client mock/live ครอบทุก endpoint | M | 🟢 |
-| A-03 | ย้าย UI/copy ที่ผ่าน UAT จาก proto | S–M | 🟢 |
-| A-04 | ปลดระวาง `apps/proto` + Prisma ใน `apps/web` | S | 🟢 |
+| A-01 | เปลี่ยนชื่อ `apps/app` → `apps/app` (git mv + package + turbo) | S | 🟢 |
+| A-02 | เพิ่ม TanStack Query ทับชั้น API client เดิม | M | 🟢 |
+| A-03 | ตรวจ mock mode ให้ครอบทุก endpoint + ทดสอบสลับสองทาง | S–M | 🟢 |
+| A-04 | ปลดระวาง Prisma + API route ใน `apps/web` | S | 🟢 |
 
 **ข้อ 🟡 ที่เหลือ 4 ข้อ — รออะไรอยู่**
 
@@ -441,14 +449,14 @@
 
 | ID | สิ่งที่ทำ | ไฟล์ |
 |---|---|---|
-| F-04 | ปุ่ม "เข้าสู่ระบบ" มุมขวาบน อยู่ก่อน "เริ่มวิเคราะห์" (ทั้ง desktop และ mobile) + หน้า `/login` แบบ mockup พร้อมปุ่ม Google | [site-header.tsx](apps/proto/components/site-header.tsx), [login/page.tsx](apps/proto/app/login/page.tsx) |
-| F-06 | กล่องยินยอมก่อนชำระเงิน — ปุ่มจ่ายถูกล็อกจนกว่าจะติ๊ก ใช้ทั้งฝั่ง employer และ jobseeker | [consent-checkbox.tsx](apps/proto/components/consent-checkbox.tsx) |
-| F-07 | ช่องวันที่แบบ DD/MM/YYYY ทุกจุด (วันเกิด + วันก่อตั้ง) พร้อมตรวจวันที่ที่ไม่มีจริง | [date-input.tsx](apps/proto/components/date-input.tsx), [forms.tsx](apps/proto/components/forms.tsx) |
-| F-12 | กล่องสีทองเปลี่ยนเป็น "ฉันเป็นองค์กร" | [page.tsx](apps/proto/app/page.tsx) |
-| F-13 | headline/subcopy ตามสไลด์หน้า 5 | [page.tsx](apps/proto/app/page.tsx) |
-| F-15 | copy การ์ดสองผลิตภัณฑ์ตามสไลด์หน้า 6 | [page.tsx](apps/proto/app/page.tsx) |
-| F-19 | `info@minghe.work` ใน footer | [site-footer.tsx](apps/proto/components/site-footer.tsx) |
-| (ประกอบ F-01) | หน้า `/legal/{terms,privacy,refund,cookies}` เป็น stub จองไว้ ระบุชัดว่ายังไม่บังคับใช้ + ลิสต์ข้อมูลที่ต้องได้มาก่อนร่าง | [legal-stub.tsx](apps/proto/components/legal-stub.tsx) |
+| F-04 | ปุ่ม "เข้าสู่ระบบ" มุมขวาบน อยู่ก่อน "เริ่มวิเคราะห์" (ทั้ง desktop และ mobile) + หน้า `/login` แบบ mockup พร้อมปุ่ม Google | [site-header.tsx](apps/app/components/site-header.tsx), [login/page.tsx](apps/app/app/login/page.tsx) |
+| F-06 | กล่องยินยอมก่อนชำระเงิน — ปุ่มจ่ายถูกล็อกจนกว่าจะติ๊ก ใช้ทั้งฝั่ง employer และ jobseeker | [consent-checkbox.tsx](apps/app/components/consent-checkbox.tsx) |
+| F-07 | ช่องวันที่แบบ DD/MM/YYYY ทุกจุด (วันเกิด + วันก่อตั้ง) พร้อมตรวจวันที่ที่ไม่มีจริง | [date-input.tsx](apps/app/components/date-input.tsx), [forms.tsx](apps/app/components/forms.tsx) |
+| F-12 | กล่องสีทองเปลี่ยนเป็น "ฉันเป็นองค์กร" | [page.tsx](apps/app/app/page.tsx) |
+| F-13 | headline/subcopy ตามสไลด์หน้า 5 | [page.tsx](apps/app/app/page.tsx) |
+| F-15 | copy การ์ดสองผลิตภัณฑ์ตามสไลด์หน้า 6 | [page.tsx](apps/app/app/page.tsx) |
+| F-19 | `info@minghe.work` ใน footer | [site-footer.tsx](apps/app/components/site-footer.tsx) |
+| (ประกอบ F-01) | หน้า `/legal/{terms,privacy,refund,cookies}` เป็น stub จองไว้ ระบุชัดว่ายังไม่บังคับใช้ + ลิสต์ข้อมูลที่ต้องได้มาก่อนร่าง | [legal-stub.tsx](apps/app/components/legal-stub.tsx) |
 
 **ยังไม่ได้ทำในรอบนี้และเหตุผล**
 - **F-14** (copy ชุด 2 หน้า 6) — ยังไม่รู้ว่ามาแทน F-13 หรือเป็นคนละ section ใส่ไปเลยเสี่ยงทับของถูก
@@ -485,7 +493,7 @@
 | ต้องรัน MySQL + API | ไม่ต้อง | ต้อง |
 | ปุ่มบัญชีทดลอง | แสดง กดเข้าใช้ได้ทันที | ไม่แสดง |
 
-หน้าเว็บเรียกผ่าน interface เดียว (`apps/proto/lib/api`) ที่มีสอง implementation
+หน้าเว็บเรียกผ่าน interface เดียว (`apps/app/lib/api`) ที่มีสอง implementation
 หน้าจอทุกหน้าไม่รู้ว่าอยู่โหมดไหน — พฤติกรรมที่ผู้ใช้เห็นเหมือนกันทั้งสองโหมด
 รวมถึงการบังคับล็อกอินก่อนชำระเงิน (F-03) และประตูความยินยอม (F-06)
 
@@ -501,11 +509,11 @@
 **รอบ UX แยกบทบาท + Admin Console (22 ส.ค. 2026)** — ตอบ feedback หลังลอง mock/live ว่า
 "ทางเข้าแต่ละฝั่งกดแล้วเห็นอะไรยังไม่ชัด" และ "แอดมินจัดการอะไรได้บ้าง / หลายคนพร้อมกัน"
 
-- [`lib/roles.ts`](apps/proto/lib/roles.ts) — แหล่งความจริงเดียวของ 4 บทบาท (เจ้าของ / HR / คนทำงาน / แอดมิน):
+- [`lib/roles.ts`](apps/app/lib/roles.ts) — แหล่งความจริงเดียวของ 4 บทบาท (เจ้าของ / HR / คนทำงาน / แอดมิน):
   เห็นอะไร · ทำอะไรได้ · ทำอะไรไม่ได้ — หน้า login, header badge และการ์ดบน dashboard อ่านจากที่นี่ทั้งหมด
 - หน้า login จัดกลุ่มบัญชีทดลองตามฝั่ง แต่ละใบมี preview "เห็น / ทำได้ / ทำไม่ได้" ก่อนกด
 - เจ้าของ vs HR ต่างกันชัดที่การ์ด "สมาชิกองค์กร": เจ้าของเห็นปุ่มเชิญ HR เห็น 🔒 พร้อมเหตุผล
-- **Admin Console** [`/admin`](apps/proto/app/admin/page.tsx) — 4 แท็บ: ภาพรวม / คิวงาน / ผู้ใช้ / เอกสารกฎหมาย
+- **Admin Console** [`/admin`](apps/app/app/admin/page.tsx) — 4 แท็บ: ภาพรวม / คิวงาน / ผู้ใช้ / เอกสารกฎหมาย
   - กลไก **รับเรื่อง (claim)** ต่อออเดอร์ — งานทุกใบแสดงผู้รับผิดชอบ, ต้องรับเรื่องก่อนดำเนินการ/ส่งมอบ
   - งานของแอดมินคนอื่น: UI ไม่แสดงปุ่มให้กดพลาด และ API ตอบ 409 พร้อมชื่อผู้ถืองาน (ทดสอบแล้วทั้ง 3 จุด)
   - ตัวกรอง "งานของฉัน" + แถบ "งานของฉัน" บนภาพรวม ให้แต่ละคนโฟกัสงานตัวเอง
@@ -541,33 +549,41 @@ F-20 กับ F-24 สเปกชัดแล้วหลังรอบคำ
 - [ ] ภาพ hero ที่ represent 5 ธาตุ **หรือ** อนุมัติให้ทำเป็น visual ในโค้ด
 - [ ] ภาพนายจ้าง / คนหางาน เวอร์ชันใหม่ + brief
 
-### เนื้อหา
-- [ ] คำอธิบาย 4 ขั้นของ section "วิถี Data Science" (F-18)
+### เนื้อหา — ขอจาก อ.เม
 - [ ] ตัวอย่างย่อหน้ารายงานที่ "เขียนถูกใจ" 1–2 ย่อหน้า (F-23) — **ชิ้นนี้มีค่ามากที่สุด**
-- [ ] อ. เม ยืนยันคำว่า "ธาตุโปรด" (F-09)
+- [ ] อ.เม ยืนยันคำว่า "ธาตุโปรด" หรือคำแทน (F-09)
+- [ ] rule table "จุดที่ควรบริหาร" 15–20 ข้อ + เงื่อนไขที่ทำให้แต่ละข้อขึ้น (F-24)
+- [ ] คำอธิบาย 4 ขั้นของ section "วิถี Data Science" (F-18)
 - [ ] นิยาม "momentum" เชิงคำนวณ (F-21)
-- [ ] รายการ "จุดที่ควรบริหาร" ที่คาดหวัง + คอลัมน์ของตาราง (F-24)
-
-### การตัดสินใจ
-- [ ] Q0-1 proto หรือ web
-- [ ] Q0-2 mockup หรือของจริง
-- [ ] Q0-3 payment gateway เจ้าไหน
-- [ ] F-03 บังคับ login ก่อนจ่าย หรือหลังจ่าย
-- [ ] F-25 "memory" หมายถึงอะไร (ก/ข/ค)
-- [ ] F-27 รับ chart ทั้งหมดหรือบางส่วน
-- [ ] F-10 DBD แค่ลิงก์แนะนำ หรือดึงข้อมูลอัตโนมัติ
+- [ ] คิว review / turnaround ของ อ.เม (Q0-4)
 
 ### ข้อมูลบริษัท (สำหรับ F-01)
-- [ ] ชื่อนิติบุคคล / เลขทะเบียน / ที่อยู่
-- [ ] เงื่อนไขคืนเงินจริง
+- [ ] ชื่อนิติบุคคล / เลขทะเบียน / ที่อยู่ + สถานะ (บริษัท / บุคคลธรรมดา)
+- [ ] เงื่อนไขคืนเงินจริง (กี่วัน + เปิดรายงานแล้วคืนได้ไหม)
 - [ ] ผู้ตรวจเอกสารกฎหมาย
+- [ ] Google Cloud project + Client ID (F-02 — **ส่งแค่ Client ID ไม่ต้องส่ง Secret**)
+- [ ] ขนาดทีมสูงสุดที่ต้องรองรับ (F-20 — ไม่ตอบก็เริ่มได้ ใช้ 10 × 3 ไปก่อน)
+
+### ✅ การตัดสินใจ — ปิดครบแล้ว 22 ส.ค. 2026
+Q0-1 `apps/app` + TanStack Query + Go API เจ้าเดียว · Q0-2 ได้ทั้ง mock และของจริงจากโค้ดชุดเดียว ·
+Q0-3 GB Prime Pay · F-01.3/4/6 retention + ช่องทาง PDPA + คุกกี้ · F-02.1/3/4 auth ที่ Go + verify email + บัญชีเดียวสองโหมด ·
+F-03.1/2/3 บังคับ login ก่อนจ่าย + carry over + teaser · F-08.1/2/3 fallback + ต่างประเทศ + ยืนยันพิกัด ·
+F-09.2 รายการเดิม · F-14.1 คนละ section · F-20.1/3 ลิสต์เรียงคะแนน + คำบรรยายสั้น ·
+F-23.2/3 ไทย + วงเล็บ + โทนที่ปรึกษา · F-24.2/3 คอลัมน์ + rule table
+
+**ยังเหลือให้ตัดสิน** (ไม่บล็อกงานปัจจุบัน)
+- [ ] F-25 "memory" หมายถึงอะไร — โปรไฟล์ / team roster / ประวัติ (ทำไปแล้วบางส่วน)
+- [ ] F-27 รับ BaZi chart ทั้งหมดหรือบางส่วน
+- [ ] F-10 DBD แค่ลิงก์แนะนำ หรือดึงข้อมูลอัตโนมัติ
+- [ ] F-05 บัญชีองค์กรแบบเต็ม — โควตาผูกกับ org หรือ user, พนักงานลาออกแล้วใครเห็นข้อมูล, PDPA ของข้อมูลบุคคลที่สาม
 
 ---
 
 ## 6. ข้อสังเกตที่ควรรู้ (ผมเจอจากการอ่านโค้ดเทียบ feedback)
 
 1. **`<input type="date">` แก้ลำดับวันที่ไม่ได้** — F-07 ต้องเปลี่ยนเป็น custom input จริง ๆ ไม่ใช่แค่ตั้ง prop เพราะ browser แสดงตาม locale ของเครื่องผู้ใช้เสมอ
-2. **F-08 (Google Maps link) ทำใน `apps/proto` ไม่ได้** — ลิงก์ย่อ `maps.app.goo.gl` ต้อง resolve ฝั่ง server แต่ proto ไม่มี API route เลย → ข้อนี้บังคับให้ตอบ Q0-1
-3. **`apps/web` มีของที่ feedback ขอไปแล้วบางส่วน** — auth (login/register), privacy, terms, orders, credits, admin → ถ้าตัดสินใจย้ายไป web จะประหยัดงาน wave 3 ไปมาก
+2. ~~**F-08 ทำใน `apps/app` ไม่ได้**~~ → **ปลดบล็อกแล้ว** — ลิงก์ย่อ `maps.app.goo.gl` ต้อง resolve ฝั่ง server และตอนนี้มี Go API แล้ว ตัวแกะลิงก์ต้องอยู่ในนั้น
+3. ~~**`apps/web` มีของที่ feedback ขอไปแล้วบางส่วน**~~ → **ตัดสินแล้วว่าจะปลดระวาง** — Go API เป็นเจ้าของข้อมูลเจ้าเดียว การมี Prisma ควบอยู่จะทำให้ข้อมูลแตกกันและตอนทำ PDPA ต้องไล่ลบสองที่
+6. **`apps/app` โตเกินคำว่า prototype ไปแล้ว** (22 ส.ค.) — มี mock/live switch, login จริง, บัญชีองค์กร + role, Admin Console พร้อมกลไกรับเรื่อง · การย้ายไป `apps/app` จึงเป็นงาน **M–L** ไม่ใช่ S · ของที่ต้องย้ายอยู่ใน A-03
 4. **feedback บวกที่ไม่ควรพลาด** — *"คอนเฟิร์มอินเตอร์เฟซสองคน"* และ *"หลักการถูกต้องแล้ว"* = โครง UI และ engine ผ่านแล้ว งานที่เหลือคือชั้นภาษาและชั้นการนำเสนอ ไม่ใช่รื้อระบบ
 5. **F-22 มีประเด็นเชิงจริยธรรม** — การแนะนำเรื่องลาออก/ย้ายงานควรใช้ภาษาแบบ "จังหวะที่เหมาะจะทบทวน" ไม่ใช่คำสั่ง และควรมี disclaimer

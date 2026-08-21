@@ -55,11 +55,11 @@ func (s *Server) RequestRegister(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"ref": ""})
 	}
 
-	ref, err := s.issueOTP(email, models.PurposeRegister)
+	ref, code, err := s.issueOTP(email, models.PurposeRegister)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, request.Err(err.Error()))
 	}
-	return c.JSON(http.StatusOK, map[string]string{"ref": ref})
+	return c.JSON(http.StatusOK, s.otpResponse(ref, code))
 }
 
 type registerBody struct {
@@ -276,11 +276,11 @@ func (s *Server) RequestResetPassword(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"ref": ""})
 	}
 
-	ref, err := s.issueOTP(email, models.PurposeResetPassword)
+	ref, code, err := s.issueOTP(email, models.PurposeResetPassword)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, request.Err(err.Error()))
 	}
-	return c.JSON(http.StatusOK, map[string]string{"ref": ref})
+	return c.JSON(http.StatusOK, s.otpResponse(ref, code))
 }
 
 type verifyResetBody struct {
@@ -346,19 +346,19 @@ func (s *Server) ResetPassword(c echo.Context) error {
 
 /* ── ตัวช่วย OTP ────────────────────────────────────────── */
 
-func (s *Server) issueOTP(email, purpose string) (string, error) {
+func (s *Server) issueOTP(email, purpose string) (string, string, error) {
 	// กันการยิงซ้ำจนอีเมลผู้ใช้ถูกถล่ม
 	count, err := s.VerificationStore.CountRecent(email, purpose, time.Now().Add(-time.Hour))
 	if err != nil {
-		return "", errors.New("cannot check otp quota")
+		return "", "", errors.New("cannot check otp quota")
 	}
 	if count >= otpMaxPerHour {
-		return "", errors.New("ขอรหัสยืนยันบ่อยเกินไป กรุณารอสักครู่")
+		return "", "", errors.New("ขอรหัสยืนยันบ่อยเกินไป กรุณารอสักครู่")
 	}
 
 	code, ref, err := request.GenerateOTP()
 	if err != nil {
-		return "", errors.New("cannot generate otp")
+		return "", "", errors.New("cannot generate otp")
 	}
 
 	record := &models.VerificationCode{
@@ -369,14 +369,14 @@ func (s *Server) issueOTP(email, purpose string) (string, error) {
 		ExpiresAt: time.Now().Add(otpTTL),
 	}
 	if err := s.VerificationStore.Create(record); err != nil {
-		return "", errors.New("cannot store otp")
+		return "", "", errors.New("cannot store otp")
 	}
 
 	if err := s.Email.SendOTP(email, code, ref, purpose); err != nil {
 		logger.Error("cannot send otp email: ", err)
-		return "", errors.New("cannot send verification email")
+		return "", "", errors.New("cannot send verification email")
 	}
-	return ref, nil
+	return ref, code, nil
 }
 
 func (s *Server) consumeOTP(email, purpose, ref, code string) error {
@@ -404,4 +404,17 @@ func (s *Server) consumeOTP(email, purpose, ref, code string) error {
 func toString(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+// otpResponse คืน ref ให้ผู้ใช้เทียบกับอีเมล
+//
+// ถ้ายังไม่ได้ตั้งค่าส่งอีเมลและเปิด MINGHE_OTP_ECHO ไว้ จะแนบรหัสมาใน dev_code ด้วย
+// เพื่อให้ทดสอบ/เดโมในเครือข่ายภายในได้โดยไม่ต้องมี Gmail credential
+// บน production ต้องปิด flag นี้ — ไม่งั้นใครก็ขอรหัสของอีเมลคนอื่นได้
+func (s *Server) otpResponse(ref, code string) map[string]string {
+	res := map[string]string{"ref": ref}
+	if ref != "" && s.Config.OTPEcho && !s.Email.Configured() {
+		res["dev_code"] = code
+	}
+	return res
 }

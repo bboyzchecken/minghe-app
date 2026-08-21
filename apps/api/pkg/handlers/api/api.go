@@ -66,7 +66,7 @@ func (s *Server) Start() error {
 	e.Use(middleware.Secure())
 	e.Use(middleware.RequestID())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{s.Config.AppBaseURL, "http://localhost:3000", "http://localhost:4311"},
+		AllowOrigins: s.allowedOrigins(),
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAuthorization},
 	}))
@@ -169,4 +169,16 @@ func (s *Server) Health(c echo.Context) error {
 		"commit":      s.Config.Commit,
 		"time":        time.Now().Format(time.RFC3339),
 	})
+}
+
+// allowedOrigins รวม origin ที่หน้าเว็บเรียกเข้ามาได้
+//
+// ใน Docker หน้าเว็บเรียกผ่าน nginx ที่ origin เดียวกัน จึงไม่ติด CORS อยู่แล้ว
+// รายการนี้มีผลตอน dev (next dev ที่ :4311) และตอนหน้าบ้านอยู่คนละโดเมน (Cloudflare Pages)
+func (s *Server) allowedOrigins() []string {
+	origins := []string{"http://localhost:4311", "http://localhost:8080", "http://localhost:3000"}
+	if s.Config.AppBaseURL != "" {
+		origins = append(origins, s.Config.AppBaseURL)
+	}
+	return append(origins, s.Config.CORSAllowedOrigins...)
 }

@@ -15,7 +15,7 @@
 
 | ID | คำตอบ |
 |---|---|
-| **Q0-1** | **สร้าง `apps/app` ใหม่** (Next 15 + TanStack Query) คุยกับ Go API · มี **mock mode ครอบทุก endpoint** ที่ทำงานเหมือนต่อจริง · ปิด mock = ต่อ Go ทันที · `apps/proto` จะถูกลบเมื่อ `apps/app` แทนได้ครบ |
+| **Q0-1** | **แอปตัวจริงคือ `apps/app`** (Next 15 + TanStack Query) คุยกับ Go API · มี **mock mode ครอบทุก endpoint** ที่ทำงานเหมือนต่อจริง · ปิด mock = ต่อ Go ทันที · `apps/app` จะถูกลบเมื่อ `apps/app` แทนได้ครบ<br>**วิธีไปถึง (ยืนยันแล้ว)**: เปลี่ยนชื่อ `apps/app` → `apps/app` แล้วเติม TanStack Query ทับของเดิม ไม่เขียนใหม่จากศูนย์ — เพราะ proto ไม่ได้เป็น mock ล้วนแล้ว มี login จริง, บัญชีองค์กร + role และ Admin Console อยู่ในนั้น |
 | **Q0-3** | **GB Prime Pay** |
 | F-01.3 | retention: ตามอายุบัญชี + ลบภายใน 90 วันหลังขอลบ + เอกสารธุรกรรมเก็บ 5 ปี |
 | F-01.4 | ช่องทาง PDPA = `info@minghe.work` อย่างเดียว (ยังไม่ใช้คำว่า DPO) |
@@ -63,9 +63,9 @@ F-09.1 คำว่า "ธาตุโปรด" · Q0-4 คิว review · F-
 ## ส่วนที่ 0 — ต้องตอบก่อน (มีผลกับข้ออื่น)
 
 ### Q0-1 ⚙️ รอบนี้ลงงานที่แอปไหน
-F-08 (ลิงก์ Google Maps) และ F-01 / F-02 / F-03 ทำใน `apps/proto` ไม่ได้ เพราะ proto ไม่มี backend
+F-08 (ลิงก์ Google Maps) และ F-01 / F-02 / F-03 ทำใน `apps/app` ไม่ได้ เพราะ proto ไม่มี backend
 
-- **ก** ⭐ ทำ mockup ต่อบน `apps/proto` ก่อน (เร็ว ให้ลูกค้าดูโฟลว์) แล้วค่อยยกไประบบจริง
+- **ก** ⭐ ทำ mockup ต่อบน `apps/app` ก่อน (เร็ว ให้ลูกค้าดูโฟลว์) แล้วค่อยยกไประบบจริง
 - **ข** ย้ายไปทำจริงบน `apps/web` เลย (มี Prisma + auth + orders อยู่แล้ว)
 - **ค** ใช้ `apps/api` (Go service ที่เพิ่งสร้าง) เป็นเจ้าของข้อมูล แล้วให้หน้าเว็บเรียก API
 - **ง** แยก: งาน UI/copy ทำบน proto · งานที่ต้อง backend ทำบน web/api
@@ -89,7 +89,7 @@ F-08 (ลิงก์ Google Maps) และ F-01 / F-02 / F-03 ทำใน `ap
 
 ## ส่วนที่ 1 — F-01 เอกสารกฎหมาย 4 ฉบับ
 
-> ต้องได้ครบถึงจะร่างเนื้อหาแทนหน้า stub ที่ทำไว้ได้ ([legal-stub.tsx](../apps/proto/components/legal-stub.tsx))
+> ต้องได้ครบถึงจะร่างเนื้อหาแทนหน้า stub ที่ทำไว้ได้ ([legal-stub.tsx](../apps/app/components/legal-stub.tsx))
 
 ### F-01.1 🔑 ข้อมูลนิติบุคคล
 Payment gateway บังคับให้แสดงบนเว็บ

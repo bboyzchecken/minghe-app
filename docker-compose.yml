@@ -1,52 +1,113 @@
 # ============================================================
-# 命合 Mìnghé — docker-compose (all-in-one)
-# รันทั้งระบบด้วยคำสั่งเดียว: docker compose up --build
-# แล้วเปิด http://localhost:3000 (รายงานเดโม /r/MH-DEMO-2569)
+# 命合 Mìnghé — ทั้งระบบด้วยคำสั่งเดียว
 #
-# นำไป deploy ที่ไหนก็ได้ที่มี Docker — เปลี่ยนแค่ AUTH_SECRET + รหัสผ่าน
+#   docker compose up --build -d
+#   → เปิด http://localhost:8080  (เครื่องอื่นใน LAN: http://<IP ของเครื่องนี้>:8080)
+#
+# services:
+#   db   MySQL 8.0                          (ข้อมูลอยู่ใน volume minghe_mysql)
+#   api  Go API  — migrate + seed อัตโนมัติตอน start (idempotent)
+#   web  Next.js static export บน nginx — proxy /backend/* → api
+#
+# ค่าที่ปรับได้ใส่ใน .env ที่ root (compose อ่านให้อัตโนมัติ) หรือส่งเป็น env ตอนสั่ง เช่น
+#   WEB_PORT=80 docker compose up --build -d
+# โหมดสาธิต (mock) สำหรับให้ลูกค้าตรวจ user process:
+#   docker compose -f docker-compose.yml -f docker-compose.mock.yml up --build -d
 # ============================================================
+
+name: minghe
 
 services:
   db:
-    image: postgres:16-alpine
-    restart: unless-stopped
+    image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
-      POSTGRES_USER: minghe
-      POSTGRES_PASSWORD: minghe_dev_secret
-      POSTGRES_DB: minghe
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-minghe_root_2026}
+      MYSQL_DATABASE: minghe
+      TZ: Asia/Bangkok
     volumes:
-      - minghe_pgdata:/var/lib/postgresql/data
+      - minghe_mysql:/var/lib/mysql
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U minghe -d minghe']
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-uroot', '-p${MYSQL_ROOT_PASSWORD:-minghe_root_2026}']
       interval: 5s
       timeout: 5s
-      retries: 12
-
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+      retries: 30
+      start_period: 20s
     restart: unless-stopped
+
+  api:
+    build:
+      context: ./apps/api
+      args:
+        COMMIT: ${GIT_COMMIT:-compose}
     depends_on:
       db:
         condition: service_healthy
     environment:
-      # ---- ฐานข้อมูล (ชี้ไปที่ service db ข้างบน) ----
-      DATABASE_URL: 'postgresql://minghe:minghe_dev_secret@db:5432/minghe'
-      # ---- ต้องเปลี่ยนก่อนใช้จริง! สุ่มใหม่ยาวๆ ----
-      AUTH_SECRET: 'docker-dev-secret-please-change-0123456789abcdef0123456789abcdef'
-      NEXT_PUBLIC_APP_URL: 'http://localhost:3000'
-      # ---- บัญชี admin ที่ seed สร้าง ----
-      ADMIN_EMAIL: 'admin@minghe.local'
-      ADMIN_PASSWORD: 'minghe-admin-2026'
-      # ---- optional: ใส่เพื่อเปิด Claude เรียบเรียง + อ่านโหงวเฮ้ง ----
-      # ANTHROPIC_API_KEY: 'sk-ant-...'
-      # ANTHROPIC_MODEL: 'claude-sonnet-5'
-      # ---- optional: token สำหรับ cron ลบรูปถ่าย (retention) ----
-      # CRON_SECRET: 'change-me'
+      ENV: production
+      PORT: '5000'
+      # ---- โหมด: live เสมอสำหรับ compose หลัก (ดู docker-compose.mock.yml สำหรับโหมดสาธิต) ----
+      MINGHE_MODE: live
+      # เครื่องเดโม: สร้างบัญชี/คำสั่งซื้อตัวอย่างให้ล็อกอินได้ทันที (/mode จะไม่ประกาศบัญชีเหล่านี้)
+      MINGHE_SEED_DEMO_ACCOUNTS: ${MINGHE_SEED_DEMO_ACCOUNTS:-true}
+      # ยังไม่มี Gmail credential → แสดงรหัส OTP บนหน้าจอตอนสมัคร (ปิดเมื่อขึ้น production จริง)
+      MINGHE_OTP_ECHO: ${MINGHE_OTP_ECHO:-true}
+      MINGHE_GOOGLE_LOGIN_ENABLED: 'false'
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      # ---- ต้องเปลี่ยนก่อนใช้จริง ----
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-compose-dev-secret-change-me-0123456789abcdef}
+      # ---- ฐานข้อมูล (service db ข้างบน) ----
+      MYSQL_HOST: db
+      MYSQL_PORT: '3306'
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-minghe_root_2026}
+      MYSQL_DATABASE: minghe
+      # ---- optional: ส่งอีเมลจริงผ่าน Gmail API (เว้นว่าง = log แทน) ----
+      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
+      GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
+      GMAIL_ACCESS_TOKEN: ${GMAIL_ACCESS_TOKEN:-}
+      GMAIL_SENDER_EMAIL: ${GMAIL_SENDER_EMAIL:-info@minghe.work}
+      # ---- optional: Google OAuth / R2 / payment ----
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URL: ${GOOGLE_OAUTH_REDIRECT_URL:-}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_REGION: ${R2_REGION:-auto}
+      R2_ACCESS_KEY: ${R2_ACCESS_KEY:-}
+      R2_SECRET_KEY: ${R2_SECRET_KEY:-}
+      R2_IMAGE_BUCKET: ${R2_IMAGE_BUCKET:-minghe-images}
+      R2_VIDEO_BUCKET: ${R2_VIDEO_BUCKET:-minghe-videos}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock}
+      PAYMENT_PUBLIC_KEY: ${PAYMENT_PUBLIC_KEY:-}
+      PAYMENT_SECRET_KEY: ${PAYMENT_SECRET_KEY:-}
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-}
+      LEGAL_TERMS_VERSION: ${LEGAL_TERMS_VERSION:-draft}
+      LEGAL_PRIVACY_VERSION: ${LEGAL_PRIVACY_VERSION:-draft}
+      LEGAL_REFUND_VERSION: ${LEGAL_REFUND_VERSION:-draft}
+      LEGAL_COOKIES_VERSION: ${LEGAL_COOKIES_VERSION:-draft}
     ports:
-      # เปลี่ยนพอร์ตฝั่งโฮสต์ได้ด้วย WEB_PORT (เช่น WEB_PORT=3100 docker compose up)
-      - '${WEB_PORT:-3000}:3000'
+      # เปิดเฉพาะ localhost ไว้ debug — ผู้ใช้ใน LAN เรียก API ผ่าน web (/backend) เท่านั้น
+      - '127.0.0.1:${API_PORT:-5000}:5000'
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/app/Dockerfile
+      args:
+        MINGHE_MODE: live
+        MINGHE_API_BASE_URL: /backend
+        MINGHE_GOOGLE_LOGIN_ENABLED: 'false'
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_UPSTREAM: http://api:5000
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    restart: unless-stopped
 
 volumes:
-  minghe_pgdata:
+  minghe_mysql:

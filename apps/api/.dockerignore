@@ -1,0 +1,6 @@
+artifacts
+*.exe
+.env
+.env.*
+docker-compose.yml
+README.md

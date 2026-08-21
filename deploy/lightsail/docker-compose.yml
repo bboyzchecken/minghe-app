@@ -1,0 +1,71 @@
+# ============================================================
+# 命合 Mìnghé — production API บน AWS Lightsail (เครื่องเดียว)
+#
+#   /opt/minghe/
+#   ├── docker-compose.yml   (ไฟล์นี้ — GitHub Actions ส่งมาให้ทุกครั้งที่ deploy)
+#   ├── Caddyfile            (TLS อัตโนมัติให้ api.minghe.work)
+#   └── .env                 (ความลับ — สร้างจาก .env.example ครั้งเดียวด้วย setup.sh)
+#
+# services: db (MySQL) · api (image จาก GHCR) · caddy (HTTPS reverse proxy)
+# หน้าบ้านไม่อยู่ที่นี่ — อยู่บน Cloudflare Pages
+# ============================================================
+
+name: minghe
+
+services:
+  db:
+    image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?ตั้ง MYSQL_ROOT_PASSWORD ใน .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-minghe}
+      TZ: Asia/Bangkok
+    volumes:
+      - minghe_mysql:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-uroot', '-p${MYSQL_ROOT_PASSWORD}']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: always
+    # ไม่ expose พอร์ต 3306 ออกนอกเครื่อง
+
+  api:
+    image: ${MINGHE_API_IMAGE:-ghcr.io/bboyzchecken/minghe-api:latest}
+    env_file: .env
+    environment:
+      ENV: production
+      PORT: '5000'
+      MINGHE_MODE: live
+      MYSQL_HOST: db
+      MYSQL_PORT: '3306'
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-minghe}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:5000:5000' # เฉพาะ localhost ไว้ตรวจ healthz — ภายนอกเข้าผ่าน caddy เท่านั้น
+    restart: always
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-api.minghe.work}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: always
+
+volumes:
+  minghe_mysql:
+  caddy_data:
+  caddy_config:

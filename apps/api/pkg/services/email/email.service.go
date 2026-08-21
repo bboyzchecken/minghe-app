@@ -120,3 +120,6 @@ func (s *EmailService) SendReportReady(to, accessCode string) error {
 
 	return s.Send(to, "รายงานของคุณพร้อมแล้ว · Mìnghé", body)
 }
+
+// Configured บอกว่ามี credential ส่งอีเมลจริงหรือไม่ — ถ้าไม่มี อีเมลจะถูก log แทนการส่ง
+func (s *EmailService) Configured() bool { return s.svc != nil }

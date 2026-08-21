@@ -20,6 +20,14 @@ type Config struct {
 	Mode string
 	// GoogleLoginEnabled — ตอนนี้ตั้งใจให้เป็น false: ปุ่มยังแสดงแต่กดไม่ได้ (F-02)
 	GoogleLoginEnabled bool
+	// OTPEcho — ส่งรหัส OTP กลับมาใน response เมื่อยังไม่ได้ตั้งค่าส่งอีเมล
+	// ใช้เฉพาะสภาพแวดล้อมทดสอบ/เดโมใน LAN — บน production ต้องเป็น false เสมอ
+	OTPEcho bool
+	// SeedDemoAccounts — สร้างบัญชีและคำสั่งซื้อตัวอย่างแม้อยู่โหมด live (เครื่องเดโม)
+	// /mode จะยังไม่ประกาศบัญชีเหล่านี้ออกไป ผู้ใช้ต้องพิมพ์เอง
+	SeedDemoAccounts bool
+	// CORSAllowedOrigins — origin ของหน้าเว็บที่อนุญาตเพิ่มจาก AppBaseURL และ localhost
+	CORSAllowedOrigins []string
 
 	MySQL     MySQLConfig
 	Redis     RedisConfig

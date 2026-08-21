@@ -27,8 +27,11 @@ func seed(db *gorm.DB, config core.Config) error {
 	if err := seedDemoOrg(db); err != nil {
 		return err
 	}
-	if config.IsMock() {
-		return ensureMockAccounts(db)
+	if config.IsMock() || config.SeedDemoAccounts {
+		if err := ensureMockAccounts(db); err != nil {
+			return err
+		}
+		return seedDemoOrders(db)
 	}
 	logger.Info("โหมด live — ข้ามการสร้างบัญชีทดลอง")
 	return nil
@@ -51,7 +54,10 @@ func ensureMockData(db *gorm.DB, config core.Config) error {
 	if err := seedDemoOrg(db); err != nil {
 		return err
 	}
-	return ensureMockAccounts(db)
+	if err := ensureMockAccounts(db); err != nil {
+		return err
+	}
+	return seedDemoOrders(db)
 }
 
 func adminAccount() models.MockAccount {

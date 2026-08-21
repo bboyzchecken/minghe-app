@@ -1,0 +1,13 @@
+# Caddy ออก TLS ให้อัตโนมัติ (Let's Encrypt) — DNS ของ API_DOMAIN ต้องชี้มาที่ IP เครื่องนี้
+# และ Lightsail firewall ต้องเปิด 80 + 443
+{$API_DOMAIN:api.minghe.work} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+	reverse_proxy api:5000 {
+		header_up X-Real-IP {remote_host}
+	}
+}

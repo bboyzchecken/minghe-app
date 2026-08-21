@@ -8,23 +8,21 @@ node_modules/
 dist/
 out/
 *.tsbuildinfo
+next-env.d.ts
 
 # env & secrets
 .env
 .env.local
 .env*.local
 
-# database (local dev)
-*.db
-*.db-journal
+# Go
+apps/api/artifacts/
+*.exe
 
 # misc
 .DS_Store
 *.log
 .vercel
-next-env.d.ts
-
-# prisma generated client lives in node_modules (default)
 
 # claude code runtime
 .claude/scheduled_tasks.lock

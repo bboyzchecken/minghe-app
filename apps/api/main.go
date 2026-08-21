@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-gormigrate/gormigrate/v2"
@@ -112,6 +114,9 @@ func loadConfig() core.Config {
 		JwtSecret:          viper.GetString("JWT_SECRET_KEY"),
 		Mode:               mode,
 		GoogleLoginEnabled: viper.GetBool("MINGHE_GOOGLE_LOGIN_ENABLED"),
+		OTPEcho:            viper.GetBool("MINGHE_OTP_ECHO"),
+		SeedDemoAccounts:   viper.GetBool("MINGHE_SEED_DEMO_ACCOUNTS"),
+		CORSAllowedOrigins: splitCSV(viper.GetString("CORS_ALLOWED_ORIGINS")),
 
 		MySQL: core.MySQLConfig{
 			Host:     viper.GetString("MYSQL_HOST"),
@@ -166,9 +171,22 @@ func newDatabase(config core.Config) (*gorm.DB, error) {
 		level = gormlogger.Info
 	}
 
-	db, err := gorm.Open(mysql.Open(config.MySQL.DSN()), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(level),
-	})
+	var db *gorm.DB
+	var err error
+	for attempt := 1; attempt <= 30; attempt++ {
+		db, err = gorm.Open(mysql.Open(config.MySQL.DSN()), &gorm.Config{
+			Logger: gormlogger.New(log.New(os.Stdout, "", log.LstdFlags), gormlogger.Config{
+				LogLevel:                  level,
+				IgnoreRecordNotFoundError: true, // seed/handler ใช้ First() เช็ก "ยังไม่มี" เป็นปกติ ไม่ใช่ error
+				Colorful:                  false,
+			}),
+		})
+		if err == nil {
+			break
+		}
+		logger.Warn("database not ready (attempt ", attempt, "/30): ", err)
+		time.Sleep(2 * time.Second)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -281,4 +299,15 @@ func runCommand(command string, config core.Config) {
 		logger.Error("unknown command: ", command)
 		os.Exit(1)
 	}
+}
+
+// splitCSV แยกค่าที่คั่นด้วย comma และตัดช่องว่าง — ใช้กับ CORS_ALLOWED_ORIGINS
+func splitCSV(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }

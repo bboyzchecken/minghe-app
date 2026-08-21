@@ -7,11 +7,13 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "pnpm --filter @minghe/app dev",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "db:push": "pnpm --filter @minghe/db db:push",
-    "db:seed": "pnpm --filter @minghe/db db:seed"
+    "api:dev": "cd apps/api && go run .",
+    "api:seed": "cd apps/api && go run . seed",
+    "up": "docker compose up --build -d",
+    "down": "docker compose down"
   },
   "devDependencies": {
     "turbo": "^2.5.4",

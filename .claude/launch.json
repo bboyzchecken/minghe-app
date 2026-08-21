@@ -2,18 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "minghe-web",
+      "name": "minghe-app",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@minghe/web", "dev"],
-      "port": 3000,
+      "runtimeArgs": ["--filter", "@minghe/app", "dev"],
+      "port": 4311,
       "autoPort": true
     },
     {
-      "name": "minghe-proto",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@minghe/proto", "dev"],
-      "port": 4311,
-      "autoPort": true
+      "name": "minghe-docker",
+      "url": "http://localhost:8080"
     }
   ]
 }

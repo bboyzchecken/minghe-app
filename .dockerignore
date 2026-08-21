@@ -7,21 +7,27 @@ node_modules
 **/.turbo
 dist
 **/dist
+out
+**/out
+**/*.tsbuildinfo
+
+# Go API มี Dockerfile ของตัวเอง (context = apps/api)
+apps/api
 
 # vcs + local
 .git
 .gitignore
 .claude
 scratchpad
+deploy
 
-# secrets + local db (ให้ค่าผ่าน compose/env เท่านั้น)
+# secrets (ให้ค่าผ่าน compose/env เท่านั้น)
 **/.env
 **/.env.local
 **/.env*.local
-**/dev.db
-**/dev.db-journal
 
 # misc
 **/*.log
+docs
 *.md
 !README.md

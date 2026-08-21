@@ -39,7 +39,7 @@ MINGHE_MODE=mock   # หรือ live
 | `admin@minghe.work` | `changeme1234` | ผู้ดูแลระบบ |
 
 รายการนี้นิยามที่ [`pkg/models/mockaccount.go`](pkg/models/mockaccount.go) และมีสำเนาฝั่งหน้าเว็บที่
-`apps/proto/lib/api/mock-accounts.ts` — **แก้ที่ใดที่หนึ่งต้องแก้อีกที่ให้ตรงกัน**
+`apps/app/lib/api/mock-accounts.ts` — **แก้ที่ใดที่หนึ่งต้องแก้อีกที่ให้ตรงกัน**
 
 ### Google login
 

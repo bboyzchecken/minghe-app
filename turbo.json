@@ -3,15 +3,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "env": [
-        "DATABASE_URL",
-        "AUTH_SECRET",
-        "CRON_SECRET",
-        "ANTHROPIC_API_KEY",
-        "ANTHROPIC_MODEL",
-        "NEXT_PUBLIC_APP_URL"
-      ],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "env": ["MINGHE_MODE", "MINGHE_API_BASE_URL", "MINGHE_GOOGLE_LOGIN_ENABLED"],
+      "outputs": ["out/**", ".next/**", "!.next/cache/**", "dist/**"]
     },
     "dev": {
       "cache": false,

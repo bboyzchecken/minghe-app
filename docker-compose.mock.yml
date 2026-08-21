@@ -1,0 +1,12 @@
+# override สำหรับโหมดสาธิต (Q0-2) — ให้ลูกค้าตรวจ user process ด้วยบัญชีทดลองที่กดได้จากหน้า login
+#   docker compose -f docker-compose.yml -f docker-compose.mock.yml up --build -d
+# หน้าเว็บทำงานในเบราว์เซอร์ล้วน (localStorage) · API ยังรันอยู่และ /mode ประกาศบัญชีทดลองออกมา
+
+services:
+  api:
+    environment:
+      MINGHE_MODE: mock
+  web:
+    build:
+      args:
+        MINGHE_MODE: mock
