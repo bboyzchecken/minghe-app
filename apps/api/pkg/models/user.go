@@ -21,13 +21,15 @@ const (
 // User — บัญชีผู้ใช้รายบุคคล (F-02)
 // องค์กรผูกกับ User ผ่าน OrganizationMember ไม่ได้เป็นบัญชีแยกชนิด (ดู organization.go)
 type User struct {
-	ID              uint       `gorm:"primarykey" json:"id"`
-	Email           string     `gorm:"uniqueIndex;size:191;not null" json:"email"`
-	PasswordHash    string     `gorm:"size:255" json:"-"`
-	Name            string     `gorm:"size:191" json:"name"`
-	Phone           string     `gorm:"size:32" json:"phone"`
-	Provider        string     `gorm:"size:16;default:email" json:"provider"` // "email" | "google"
-	GoogleID        string     `gorm:"uniqueIndex;size:191" json:"-"`
+	ID           uint   `gorm:"primarykey" json:"id"`
+	Email        string `gorm:"uniqueIndex;size:191;not null" json:"email"`
+	PasswordHash string `gorm:"size:255" json:"-"`
+	Name         string `gorm:"size:191" json:"name"`
+	Phone        string `gorm:"size:32" json:"phone"`
+	Provider     string `gorm:"size:16;default:email" json:"provider"` // "email" | "google"
+	// เป็น pointer เพื่อให้บัญชีที่ไม่ได้ผูก Google เก็บเป็น NULL
+	// MySQL ยอมให้มี NULL ซ้ำได้ในคอลัมน์ unique แต่ไม่ยอมให้มีสตริงว่างซ้ำ
+	GoogleID        *string    `gorm:"uniqueIndex;size:191" json:"-"`
 	AvatarURL       string     `gorm:"size:512" json:"avatar_url"`
 	EmailVerifiedAt *time.Time `json:"email_verified_at"`
 	Role            string     `gorm:"size:16;default:user" json:"role"`

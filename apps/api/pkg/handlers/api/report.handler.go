@@ -57,8 +57,17 @@ type openReportBody struct {
 	Pin  string `json:"pin"`
 }
 
+type openReportResponse struct {
+	Order  orderResponse   `json:"order"`
+	Report *reportResponse `json:"report"`
+}
+
 // OpenReportByCode เปิดรายงานด้วยรหัส PJX-XXXX-XXXX โดยไม่ต้องล็อกอิน
 // รองรับลูกค้าที่ซื้อก่อนมีบัญชี และการส่งรายงานให้ผู้อื่นอ่าน
+//
+// คืน order เสมอ และคืน report เมื่อเผยแพร่แล้วเท่านั้น
+// ที่ต้องคืน order ด้วยเพราะ engine ปาจืออยู่ฝั่ง client (packages/core เป็น TypeScript)
+// หน้าเว็บจึงประกอบรายงานจาก snapshot ใน order ได้ทันทีระหว่างรอฉบับที่ซินแสตรวจ
 func (s *Server) OpenReportByCode(c echo.Context) error {
 	var body openReportBody
 	if err := c.Bind(&body); err != nil {
@@ -79,14 +88,13 @@ func (s *Server) OpenReportByCode(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, request.Err("PIN ไม่ถูกต้อง"))
 	}
 
-	report, findErr := s.ReportStore.FindLatestByOrder(order.ID)
-	if findErr != nil || report.Status != models.ReportPublished {
-		return c.JSON(http.StatusAccepted, map[string]string{
-			"status":  "processing",
-			"message": "รายงานกำลังอยู่ระหว่างจัดทำ",
-		})
+	res := openReportResponse{Order: toOrderResponse(order)}
+	if report, findErr := s.ReportStore.FindLatestByOrder(order.ID); findErr == nil &&
+		report.Status == models.ReportPublished {
+		published := toReportResponse(report)
+		res.Report = &published
 	}
-	return c.JSON(http.StatusOK, toReportResponse(report))
+	return c.JSON(http.StatusOK, res)
 }
 
 func toReportResponse(r *models.Report) reportResponse {

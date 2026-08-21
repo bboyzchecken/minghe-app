@@ -32,10 +32,7 @@ import (
 var GitCommit = "dev"
 
 func main() {
-	if err := godotenv.Load(".env"); err != nil {
-		// ไม่ใช่ error — บน production ค่าตั้งมาจาก environment ไม่ใช่ไฟล์
-		logger.Debug("no .env file found, reading from environment")
-	}
+	loadDotEnv()
 	viper.AutomaticEnv()
 
 	// ตรึง timezone ทั้ง process — ปาจือขึ้นกับเวลา จึงต้องไม่ให้ขึ้นกับ locale ของเครื่อง
@@ -74,13 +71,47 @@ func main() {
 	app.Run()
 }
 
+// loadDotEnv อ่านไฟล์ตั้งค่าจาก root ของโปรเจกต์เป็นหลัก
+//
+// เจตนา: ให้มี .env ที่เดียวคือ root แล้วทั้งหน้าเว็บและ API อ่านไฟล์เดียวกัน
+// ไฟล์แรกที่เจอชนะเสมอ (godotenv ไม่เขียนทับค่าที่ตั้งไว้แล้ว)
+// บน production ไม่ต้องมีไฟล์ — ค่าตั้งมาจาก environment ตรง ๆ
+func loadDotEnv() {
+	candidates := []string{
+		"../../.env", // รันด้วย go run . จาก apps/api
+		"../.env",
+		".env", // รันจาก root หรืออยู่ใน container
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		if err := godotenv.Load(path); err != nil {
+			logger.Warn("cannot read ", path, ": ", err)
+			continue
+		}
+		logger.Debug("loaded config from ", path)
+		return
+	}
+	logger.Debug("no .env file found, reading from environment")
+}
+
 func loadConfig() core.Config {
+	mode := viper.GetString("MINGHE_MODE")
+	if mode != core.ModeMock {
+		// ค่าที่ไม่รู้จักถือเป็น live — ปลอดภัยกว่าเผลอเปิดบัญชีทดลองบนของจริง
+		mode = core.ModeLive
+	}
+
 	return core.Config{
-		Environment: viper.GetString("ENV"),
-		Commit:      GitCommit,
-		Port:        viper.GetString("PORT"),
-		AppBaseURL:  viper.GetString("APP_BASE_URL"),
-		JwtSecret:   viper.GetString("JWT_SECRET_KEY"),
+		Environment:        viper.GetString("ENV"),
+		Commit:             GitCommit,
+		Port:               viper.GetString("PORT"),
+		AppBaseURL:         viper.GetString("APP_BASE_URL"),
+		JwtSecret:          viper.GetString("JWT_SECRET_KEY"),
+		Mode:               mode,
+		GoogleLoginEnabled: viper.GetBool("MINGHE_GOOGLE_LOGIN_ENABLED"),
 
 		MySQL: core.MySQLConfig{
 			Host:     viper.GetString("MYSQL_HOST"),
@@ -145,6 +176,13 @@ func newDatabase(config core.Config) (*gorm.DB, error) {
 	if err := runMigrations(db); err != nil {
 		return nil, err
 	}
+
+	// โหมด mock: เตรียมบัญชีทดลองให้พร้อมทุกครั้งที่ start
+	// จะได้สลับ MINGHE_MODE=mock แล้วกดใช้ได้เลยโดยไม่ต้องสั่ง seed เอง
+	if err := ensureMockData(db, config); err != nil {
+		logger.Warn("cannot prepare mock data: ", err)
+	}
+
 	return db, nil
 }
 
@@ -173,6 +211,33 @@ func runMigrations(db *gorm.DB) error {
 					"team_members", "teams", "organization_members", "organizations",
 					"verification_codes", "users",
 				)
+			},
+		},
+		{
+			// google_id เดิมเป็น NOT NULL โดยปริยาย ทำให้บัญชีที่ไม่ได้ผูก Google
+			// เก็บเป็นสตริงว่างและชนกันเองที่ unique index — ต้องเป็น NULL แทน
+			ID: "20260822_google_id_null_when_unused",
+			Migrate: func(tx *gorm.DB) error {
+				if err := tx.AutoMigrate(&models.User{}); err != nil {
+					return err
+				}
+				return tx.Exec("UPDATE users SET google_id = NULL WHERE google_id = ''").Error
+			},
+			Rollback: func(tx *gorm.DB) error {
+				return tx.Exec("UPDATE users SET google_id = '' WHERE google_id IS NULL").Error
+			},
+		},
+		{
+			// เพิ่มช่อง "ผู้รับเรื่อง" ให้คำสั่งซื้อ — รองรับแอดมินหลายคนทำงานพร้อมกัน
+			ID: "20260822_order_assignee",
+			Migrate: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&models.Order{})
+			},
+			Rollback: func(tx *gorm.DB) error {
+				if err := tx.Migrator().DropColumn(&models.Order{}, "assigned_admin_id"); err != nil {
+					return err
+				}
+				return tx.Migrator().DropColumn(&models.Order{}, "assigned_admin_name")
 			},
 		},
 	})

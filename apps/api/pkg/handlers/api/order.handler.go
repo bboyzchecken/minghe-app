@@ -53,7 +53,7 @@ func (s *Server) ListOrders(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, request.Err("cannot list orders"))
 	}
-	return c.JSON(http.StatusOK, request.ListResponse{Data: orders, Pagination: pagination})
+	return c.JSON(http.StatusOK, request.ListResponse{Data: toOrderResponses(orders), Pagination: pagination})
 }
 
 // CreateOrder สร้างคำสั่งซื้อในสถานะ draft
@@ -115,7 +115,7 @@ func (s *Server) CreateOrder(c echo.Context) error {
 	if err := s.OrderStore.Create(order); err != nil {
 		return c.JSON(http.StatusInternalServerError, request.Err("cannot create order"))
 	}
-	return c.JSON(http.StatusCreated, order)
+	return c.JSON(http.StatusCreated, toOrderResponse(order))
 }
 
 func (s *Server) GetOrder(c echo.Context) error {
@@ -123,7 +123,7 @@ func (s *Server) GetOrder(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(http.StatusOK, order)
+	return c.JSON(http.StatusOK, toOrderResponse(order))
 }
 
 type payOrderBody struct {
@@ -179,7 +179,7 @@ func (s *Server) PayOrder(c echo.Context) error {
 	if err := s.OrderStore.Update(order); err != nil {
 		return c.JSON(http.StatusInternalServerError, request.Err("cannot update order"))
 	}
-	return c.JSON(http.StatusOK, order)
+	return c.JSON(http.StatusOK, toOrderResponse(order))
 }
 
 /* ── ราคา ───────────────────────────────────────────────── */

@@ -78,6 +78,7 @@ func (s *Server) Start() error {
 	e.Use(logger.Middleware())
 
 	e.GET("/healthz", s.Health)
+	e.GET("/mode", s.GetMode) // หน้าเว็บใช้ตรวจว่า API อยู่โหมด mock หรือ live
 
 	/* ── auth (สาธารณะ) — F-02, F-03 ─────────────────────── */
 	auth := e.Group("/auth")
@@ -143,8 +144,12 @@ func (s *Server) Start() error {
 	admin := e.Group("/admin", s.JwtMiddleware(), s.IsAdmin())
 	admin.GET("/users", s.AdminListUsers)
 	admin.PATCH("/users/:id/status", s.AdminUpdateUserStatus)
+	admin.GET("/overview", s.AdminOverview)
 	admin.GET("/orders", s.AdminListOrders)
+	admin.POST("/orders/:id/claim", s.AdminClaimOrder)     // รับเรื่อง (multi-admin)
+	admin.DELETE("/orders/:id/claim", s.AdminReleaseOrder) // คืนงานเข้าคิว
 	admin.POST("/orders/:id/process", s.AdminProcessOrder)
+	admin.POST("/orders/:id/deliver", s.AdminDeliverOrder)
 	admin.GET("/legal", s.AdminListLegalDocuments)
 	admin.POST("/legal", s.AdminUpsertLegalDocument)
 
@@ -152,13 +157,14 @@ func (s *Server) Start() error {
 	if port == "" {
 		port = "5000"
 	}
-	logger.Info("api listening on :" + port)
+	logger.Info("api listening on :" + port + " · mode=" + s.Config.Mode)
 	return e.Start(":" + port)
 }
 
 func (s *Server) Health(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"status":      "ok",
+		"mode":        s.Config.Mode,
 		"environment": s.Config.Environment,
 		"commit":      s.Config.Commit,
 		"time":        time.Now().Format(time.RFC3339),

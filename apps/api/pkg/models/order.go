@@ -51,9 +51,14 @@ type Order struct {
 	Currency     string `gorm:"size:8;default:THB" json:"currency"`
 	Status       string `gorm:"size:24;default:draft;index" json:"status"`
 
-	ConsentID     *uint  `gorm:"index" json:"consent_id"` // ต้องมีก่อนชำระเงิน (F-06)
-	PaymentRef    string `gorm:"size:191" json:"payment_ref"`
-	PaymentMethod string `gorm:"size:32" json:"payment_method"`
+	ConsentID *uint `gorm:"index" json:"consent_id"` // ต้องมีก่อนชำระเงิน (F-06)
+
+	// ผู้ดูแลที่ "รับเรื่อง" คำสั่งซื้อนี้ไว้ — กลไกกันแอดมินหลายคนทำงานชนกัน
+	// เก็บชื่อเป็น snapshot ด้วย เพื่อให้หน้ารายการแสดงได้โดยไม่ต้อง join
+	AssignedAdminID   *uint  `gorm:"index" json:"assigned_admin_id"`
+	AssignedAdminName string `gorm:"size:191" json:"assigned_admin_name"`
+	PaymentRef        string `gorm:"size:191" json:"payment_ref"`
+	PaymentMethod     string `gorm:"size:32" json:"payment_method"`
 
 	PinHash     string     `gorm:"size:255" json:"-"`
 	PaidAt      *time.Time `json:"paid_at"`
@@ -79,4 +84,6 @@ type OrderStore interface {
 	List(query ListOrderQuery) ([]*Order, *store.PaginationResult, error)
 	Update(order *Order) error
 	Delete(id int) error
+	// CountByStatus ใช้ทำภาพรวมหน้า admin — คืนจำนวนคำสั่งซื้อแยกตามสถานะ
+	CountByStatus() (map[string]int64, error)
 }

@@ -1,8 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { homeForUser, useSession } from '@/lib/session'
 import { Logo } from './logo'
+import { RoleBadge } from './role-badge'
 
 const NAV = [
   { href: '/employer', label: 'สำหรับองค์กร' },
@@ -14,6 +17,15 @@ const NAV = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false)
+  const { user, loading, signOut } = useSession()
+  const router = useRouter()
+
+  function handleSignOut() {
+    signOut()
+    setOpen(false)
+    router.push('/')
+  }
+
   return (
     <header className="sticky top-0 z-40 border-b border-line/70 bg-paper/85 backdrop-blur-md">
       <div className="container-page flex h-16 items-center justify-between">
@@ -28,14 +40,35 @@ export function SiteHeader() {
               {n.label}
             </Link>
           ))}
-          {/* F-04 — "เข้าสู่ระบบ" ต้องอยู่ก่อนปุ่ม "เริ่มวิเคราะห์" ที่มุมขวาบน */}
-          <Link href="/login" className="text-sm font-medium text-ink transition-colors hover:text-gold">
-            เข้าสู่ระบบ
-          </Link>
-          <Link href="/employer/new" className="btn-primary text-sm">
-            เริ่มวิเคราะห์
-          </Link>
+
+          {loading ? (
+            <span className="h-8 w-28 animate-pulse rounded-md bg-paper-warm" aria-hidden="true" />
+          ) : user ? (
+            <>
+              <Link
+                href={homeForUser(user)}
+                className="flex items-center gap-2 text-sm font-medium text-ink transition-colors hover:text-gold"
+              >
+                {user.name}
+                <RoleBadge user={user} />
+              </Link>
+              <button onClick={handleSignOut} className="btn-ghost !px-4 !py-2 text-sm">
+                ออกจากระบบ
+              </button>
+            </>
+          ) : (
+            <>
+              {/* F-04 — "เข้าสู่ระบบ" ต้องอยู่ก่อนปุ่ม "เริ่มวิเคราะห์" ที่มุมขวาบน */}
+              <Link href="/login" className="text-sm font-medium text-ink transition-colors hover:text-gold">
+                เข้าสู่ระบบ
+              </Link>
+              <Link href="/employer/new" className="btn-primary text-sm">
+                เริ่มวิเคราะห์
+              </Link>
+            </>
+          )}
         </nav>
+
         <button
           className="md:hidden rounded-md border border-line p-2 text-ink-soft"
           onClick={() => setOpen((v) => !v)}
@@ -46,6 +79,7 @@ export function SiteHeader() {
           </svg>
         </button>
       </div>
+
       {open && (
         <div className="border-t border-line bg-paper md:hidden">
           <nav className="container-page flex flex-col py-3">
@@ -59,12 +93,31 @@ export function SiteHeader() {
                 {n.label}
               </Link>
             ))}
-            <Link href="/login" onClick={() => setOpen(false)} className="py-2.5 text-sm font-medium text-ink">
-              เข้าสู่ระบบ
-            </Link>
-            <Link href="/employer/new" onClick={() => setOpen(false)} className="btn-primary mt-2 text-sm">
-              เริ่มวิเคราะห์
-            </Link>
+
+            {user ? (
+              <>
+                <Link
+                  href={homeForUser(user)}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 py-2.5 text-sm font-medium text-ink"
+                >
+                  {user.name}
+                  <RoleBadge user={user} />
+                </Link>
+                <button onClick={handleSignOut} className="btn-ghost mt-2 text-sm">
+                  ออกจากระบบ
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/login" onClick={() => setOpen(false)} className="py-2.5 text-sm font-medium text-ink">
+                  เข้าสู่ระบบ
+                </Link>
+                <Link href="/employer/new" onClick={() => setOpen(false)} className="btn-primary mt-2 text-sm">
+                  เริ่มวิเคราะห์
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       )}

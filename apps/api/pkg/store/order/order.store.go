@@ -72,3 +72,23 @@ func (s *orderStoreService) Delete(id int) error {
 	return s.db.Model(&models.Order{}).Where("id = ?", id).
 		Update("status", models.OrderCancelled).Error
 }
+
+func (s *orderStoreService) CountByStatus() (map[string]int64, error) {
+	var rows []struct {
+		Status string
+		Total  int64
+	}
+	err := s.db.Model(&models.Order{}).
+		Select("status, COUNT(*) as total").
+		Group("status").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	counts := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		counts[r.Status] = r.Total
+	}
+	return counts, nil
+}

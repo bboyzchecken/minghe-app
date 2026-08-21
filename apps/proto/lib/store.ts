@@ -1,75 +1,68 @@
 /**
- * ส่งต่อผลจาก wizard → หน้ารายงาน ผ่าน sessionStorage (prototype, ไม่มี backend)
+ * ส่งต่อคำสั่งซื้อที่กำลังเปิดอยู่ระหว่างหน้า (wizard → /report, /r → /report, dashboard → /report)
+ *
+ * เก็บใน sessionStorage เพราะเป็นข้อมูลชั่วคราวของแท็บนั้น ไม่ใช่ที่เก็บถาวร
+ * ที่เก็บจริงอยู่ที่ client (โหมด mock = localStorage, โหมด live = ฐานข้อมูลผ่าน API)
  */
 
-import type { GenerateReportInput } from '@minghe/report/types'
+import type { OrderRecord } from '@/lib/api/types'
 
-export interface PriceLine {
-  label: string
-  amount: number
-}
+const CURRENT_KEY = 'minghe:proto:currentOrder'
 
-export interface StoredOrder {
-  product: 'employer' | 'jobseeker'
-  input: GenerateReportInput
-  priceLines: PriceLine[]
-  total: number
-  accessCode: string
-  pin?: string
-  createdAt: string
-  express?: boolean
-}
-
-const KEY = 'minghe:proto:order'
-
-export function saveOrder(order: StoredOrder) {
+export function saveCurrentOrder(order: OrderRecord) {
   try {
-    sessionStorage.setItem(KEY, JSON.stringify(order))
+    sessionStorage.setItem(CURRENT_KEY, JSON.stringify(order))
   } catch {
     /* ignore */
   }
 }
 
-export function loadOrder(): StoredOrder | null {
+export function loadCurrentOrder(): OrderRecord | null {
   try {
-    const raw = sessionStorage.getItem(KEY)
-    return raw ? (JSON.parse(raw) as StoredOrder) : null
+    const raw = sessionStorage.getItem(CURRENT_KEY)
+    return raw ? (JSON.parse(raw) as OrderRecord) : null
   } catch {
     return null
   }
 }
 
-export function clearOrder() {
+export function clearCurrentOrder() {
   try {
-    sessionStorage.removeItem(KEY)
+    sessionStorage.removeItem(CURRENT_KEY)
   } catch {
     /* ignore */
   }
 }
 
-/* ── เปิดรายงานด้วยรหัส (returning customer, mock) ─────────────────── */
-const OPENED_KEY = 'minghe:proto:openedCode'
+/* ── ร่างที่กรอกค้างไว้ใน wizard ────────────────────────────────────
+ * ใช้ตอนพาผู้ใช้ไปหน้าล็อกอินกลางคัน (F-03) — กลับมาแล้วต้องได้ของเดิมครบ
+ */
 
-export function saveOpenedCode(code: string) {
+const DRAFT_PREFIX = 'minghe:proto:draft:'
+
+export function saveWizardDraft(key: string, data: unknown) {
   try {
-    sessionStorage.setItem(OPENED_KEY, code)
+    sessionStorage.setItem(DRAFT_PREFIX + key, JSON.stringify(data))
   } catch {
     /* ignore */
   }
 }
 
-export function loadOpenedCode(): string | null {
+export function loadWizardDraft<T>(key: string): T | null {
   try {
-    return sessionStorage.getItem(OPENED_KEY)
+    const raw = sessionStorage.getItem(DRAFT_PREFIX + key)
+    return raw ? (JSON.parse(raw) as T) : null
   } catch {
     return null
   }
 }
 
-/** รหัสเปิดรูปแบบ PJX-XXXX-XXXX (ตามสเปกเดิม §7) */
-export function generateAccessCode(): string {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  const block = () =>
-    Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')
-  return `PJX-${block()}-${block()}`
+export function clearWizardDraft(key: string) {
+  try {
+    sessionStorage.removeItem(DRAFT_PREFIX + key)
+  } catch {
+    /* ignore */
+  }
 }
+
+export { generateAccessCode } from '@/lib/access-code'

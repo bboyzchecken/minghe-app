@@ -57,6 +57,12 @@ func (s *Server) AdminUpdateUserStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
+// adminOrderRow = orderResponse + ข้อมูลที่หน้า admin ต้องเห็นเพิ่ม (อีเมลลูกค้า)
+type adminOrderRow struct {
+	orderResponse
+	CustomerEmail string `json:"customer_email"`
+}
+
 func (s *Server) AdminListOrders(c echo.Context) error {
 	query := models.ListOrderQuery{
 		PaginationQuery: request.GetPaginationQuery(c),
@@ -69,7 +75,166 @@ func (s *Server) AdminListOrders(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, request.Err("cannot list orders"))
 	}
-	return c.JSON(http.StatusOK, request.ListResponse{Data: orders, Pagination: pagination})
+
+	// เติมอีเมลลูกค้า — ดึงผู้ใช้เป็นชุดเดียว ไม่ยิงทีละแถว
+	emails := map[uint]string{}
+	for _, o := range orders {
+		if o.UserID == nil {
+			continue
+		}
+		if _, seen := emails[*o.UserID]; seen {
+			continue
+		}
+		if u, findErr := s.UserStore.Find(int(*o.UserID)); findErr == nil {
+			emails[*o.UserID] = u.Email
+		}
+	}
+
+	rows := make([]adminOrderRow, 0, len(orders))
+	for _, o := range orders {
+		row := adminOrderRow{orderResponse: toOrderResponse(o)}
+		if o.UserID != nil {
+			row.CustomerEmail = emails[*o.UserID]
+		}
+		rows = append(rows, row)
+	}
+	return c.JSON(http.StatusOK, request.ListResponse{Data: rows, Pagination: pagination})
+}
+
+/* ── ภาพรวม + การรับเรื่อง (multi-admin) ─────────────────── */
+
+// AdminOverview ตัวเลขสรุปสำหรับหน้าแรกของ Admin Console
+func (s *Server) AdminOverview(c echo.Context) error {
+	orderCounts, err := s.OrderStore.CountByStatus()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, request.Err("cannot count orders"))
+	}
+
+	_, allUsers, err := s.UserStore.List(models.ListUserQuery{})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, request.Err("cannot count users"))
+	}
+	_, activeUsers, err := s.UserStore.List(models.ListUserQuery{Status: models.StatusActive})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, request.Err("cannot count users"))
+	}
+
+	docs, err := s.ConsentStore.ListDocuments("th")
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, request.Err("cannot list documents"))
+	}
+	published := 0
+	for _, d := range docs {
+		if d.Status == models.DocPublished {
+			published++
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"orders":          orderCounts,
+		"users_total":     allUsers.Total,
+		"users_active":    activeUsers.Total,
+		"legal_published": published,
+		"legal_total":     4,
+	})
+}
+
+// currentAdmin คืนบัญชีของแอดมินที่กำลังเรียก endpoint นี้
+func (s *Server) currentAdmin(c echo.Context) (*models.User, error) {
+	return s.UserStore.Find(int(CurrentUserID(c)))
+}
+
+// AdminClaimOrder "รับเรื่อง" — จองคำสั่งซื้อไว้กับตัวเอง
+// ถ้ามีแอดมินคนอื่นถืออยู่แล้วจะได้ 409 พร้อมชื่อ เพื่อไม่ให้ทำงานซ้อนกัน
+func (s *Server) AdminClaimOrder(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, request.Err("invalid id"))
+	}
+	order, err := s.OrderStore.Find(id)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, request.Err("order not found"))
+	}
+
+	me, err := s.currentAdmin(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, request.Err("unauthorized"))
+	}
+
+	if order.AssignedAdminID != nil && *order.AssignedAdminID != me.ID {
+		return c.JSON(http.StatusConflict,
+			request.Err("งานนี้อยู่กับ "+order.AssignedAdminName+" แล้ว"))
+	}
+
+	order.AssignedAdminID = &me.ID
+	order.AssignedAdminName = me.Name
+	if err := s.OrderStore.Update(order); err != nil {
+		return c.JSON(http.StatusInternalServerError, request.Err("cannot claim order"))
+	}
+	return c.JSON(http.StatusOK, toOrderResponse(order))
+}
+
+// AdminReleaseOrder คืนงานเข้าคิวกลาง
+// ตั้งใจให้แอดมินคนไหนก็คืนได้ (ไม่จำกัดเฉพาะผู้ถือ) — รองรับกรณีคนถืองานไม่อยู่
+func (s *Server) AdminReleaseOrder(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, request.Err("invalid id"))
+	}
+	order, err := s.OrderStore.Find(id)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, request.Err("order not found"))
+	}
+
+	order.AssignedAdminID = nil
+	order.AssignedAdminName = ""
+	if err := s.OrderStore.Update(order); err != nil {
+		return c.JSON(http.StatusInternalServerError, request.Err("cannot release order"))
+	}
+	return c.JSON(http.StatusOK, toOrderResponse(order))
+}
+
+// AdminDeliverOrder ปิดงาน: processing → delivered และเผยแพร่รายงานฉบับล่าสุดถ้ามี
+func (s *Server) AdminDeliverOrder(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, request.Err("invalid id"))
+	}
+	order, err := s.OrderStore.Find(id)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, request.Err("order not found"))
+	}
+	if order.Status != models.OrderProcessing {
+		return c.JSON(http.StatusConflict, request.Err("ส่งมอบได้เฉพาะงานที่กำลังดำเนินการ"))
+	}
+
+	me, err := s.currentAdmin(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, request.Err("unauthorized"))
+	}
+	if order.AssignedAdminID != nil && *order.AssignedAdminID != me.ID {
+		return c.JSON(http.StatusConflict,
+			request.Err("งานนี้อยู่กับ "+order.AssignedAdminName+" แล้ว — ให้เจ้าของงานเป็นผู้ส่งมอบ"))
+	}
+
+	now := time.Now()
+	order.Status = models.OrderDelivered
+	order.DeliveredAt = &now
+	if err := s.OrderStore.Update(order); err != nil {
+		return c.JSON(http.StatusInternalServerError, request.Err("cannot update order"))
+	}
+
+	// เผยแพร่รายงานล่าสุดของออเดอร์นี้ พร้อมบันทึกว่าใครตรวจ
+	if report, findErr := s.ReportStore.FindLatestByOrder(order.ID); findErr == nil {
+		report.Status = models.ReportPublished
+		report.ReviewedBy = me.Name
+		report.ReviewedAt = &now
+		if err := s.ReportStore.Update(report); err != nil {
+			logger.Warn("cannot publish report: ", err)
+		}
+	}
+
+	return c.JSON(http.StatusOK, toOrderResponse(order))
 }
 
 // AdminProcessOrder เปลี่ยนสถานะเป็น processing และสร้างรายงานฉบับร่างรอซินแสตรวจ
@@ -90,6 +255,18 @@ func (s *Server) AdminProcessOrder(c echo.Context) error {
 		return c.JSON(http.StatusConflict, request.Err("คำสั่งซื้อนี้ยังไม่ได้ชำระเงิน"))
 	}
 
+	// วินัยการทำงานหลายแอดมิน: งานของคนอื่นห้ามแตะ / งานว่างถือว่ารับเรื่องอัตโนมัติ
+	me, err := s.currentAdmin(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, request.Err("unauthorized"))
+	}
+	if order.AssignedAdminID != nil && *order.AssignedAdminID != me.ID {
+		return c.JSON(http.StatusConflict,
+			request.Err("งานนี้อยู่กับ "+order.AssignedAdminName+" แล้ว"))
+	}
+
+	order.AssignedAdminID = &me.ID
+	order.AssignedAdminName = me.Name
 	order.Status = models.OrderProcessing
 	if err := s.OrderStore.Update(order); err != nil {
 		return c.JSON(http.StatusInternalServerError, request.Err("cannot update order"))
@@ -105,7 +282,7 @@ func (s *Server) AdminProcessOrder(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusAccepted, map[string]any{
-		"order":  order,
+		"order":  toOrderResponse(order),
 		"report": report,
 	})
 }

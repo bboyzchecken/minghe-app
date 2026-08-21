@@ -1,5 +1,13 @@
 package core
 
+// โหมดการทำงานของทั้งระบบ — ตั้งที่ MINGHE_MODE ใน .env ของ root project
+const (
+	// ModeMock — ใช้บัญชีทดลองที่ seed ไว้ ปุ่มบัญชีทดลองบนหน้า login เปิดให้กด
+	ModeMock = "mock"
+	// ModeLive — ใช้บัญชีจริงเท่านั้น ไม่ประกาศบัญชีทดลองออกไปทาง API
+	ModeLive = "live"
+)
+
 // Config รวมค่าตั้งทั้งหมดของ service — อ่านจาก environment ผ่าน viper ที่ main.go
 type Config struct {
 	Environment string
@@ -7,6 +15,11 @@ type Config struct {
 	Port        string
 	AppBaseURL  string // URL ของหน้าเว็บ ใช้ประกอบลิงก์ในอีเมล
 	JwtSecret   string
+
+	// Mode คือสวิตช์ mock/live ตัวเดียวกับที่หน้าเว็บอ่าน
+	Mode string
+	// GoogleLoginEnabled — ตอนนี้ตั้งใจให้เป็น false: ปุ่มยังแสดงแต่กดไม่ได้ (F-02)
+	GoogleLoginEnabled bool
 
 	MySQL     MySQLConfig
 	Redis     RedisConfig
@@ -72,6 +85,10 @@ type LegalConfig struct {
 	RefundVersion  string
 	CookiesVersion string
 }
+
+// IsMock บอกว่า service กำลังทำงานในโหมดสาธิตหรือไม่
+// ค่าที่ไม่รู้จักถือเป็น live เสมอ — ปลอดภัยกว่าเผลอเปิดบัญชีทดลองบนของจริง
+func (c Config) IsMock() bool { return c.Mode == ModeMock }
 
 func (c MySQLConfig) DSN() string {
 	return c.Username + ":" + c.Password + "@tcp(" + c.Host + ":" + c.Port + ")/" + c.Database +

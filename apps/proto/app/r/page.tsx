@@ -1,84 +1,47 @@
 'use client'
 
 /**
- * /r — ประตูเปิดรายงานสำหรับลูกค้าที่ซื้อไปแล้ว (mock สาธิต)
- * กรอกรหัสเปิดรายงาน PJX-XXXX-XXXX → เปิดรายงาน (บางฉบับป้องกันด้วย PIN)
- * เวอร์ชันสาธิต: ไม่มี backend — จำลองการค้นหารหัสในเครื่อง
+ * /r — ประตูเปิดรายงานสำหรับลูกค้าที่ซื้อไปแล้ว
+ *
+ * ไม่ต้องล็อกอิน: กรอกรหัส PJX-XXXX-XXXX (บางฉบับมี PIN เพิ่มอีกชั้น)
+ * ค้นหาจริงผ่าน client — โหมด mock ค้นในเบราว์เซอร์ โหมด live ยิงไปที่ POST /r
  */
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { Logo } from '@/components/logo'
-import { loadOrder, saveOpenedCode } from '@/lib/store'
-
-/** รหัสตัวอย่างสำหรับสาธิต — โยงกับรายการใน dashboard */
-const DEMO_CODES: Record<string, { label: string; pin?: string }> = {
-  'PJX-K7QM-3PLA': { label: 'คุณวีรภัทร × ผู้บริหาร' },
-  'PJX-2XKD-9MRT': { label: 'บมจ. รุ่งเรืองโลจิสติกส์' },
-  'PJX-9WDC-XR2E': { label: 'คุณปาริชาต × บจก. มงคลเทรด', pin: '1988' },
-}
-
-/** จัดรูปแบบขณะพิมพ์: pjxk7qm3pla → PJX-K7QM-3PLA */
-function formatAsTyping(value: string): string {
-  const raw = value
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-    .slice(0, 11)
-  if (raw.length <= 3) return raw
-  if (raw.length <= 7) return `${raw.slice(0, 3)}-${raw.slice(3)}`
-  return `${raw.slice(0, 3)}-${raw.slice(3, 7)}-${raw.slice(7)}`
-}
+import { client } from '@/lib/api'
+import { formatAccessCode } from '@/lib/access-code'
+import { IS_MOCK } from '@/lib/env'
+import { saveCurrentOrder } from '@/lib/store'
 
 export default function OpenReportPage() {
   const router = useRouter()
   const [code, setCode] = useState('')
+  const [pin, setPin] = useState('')
+  const [needsPin, setNeedsPin] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [opening, setOpening] = useState(false)
-  const [pinFor, setPinFor] = useState<string | null>(null)
-  const [pin, setPin] = useState('')
-  const [ownCode, setOwnCode] = useState<string | null>(null)
 
-  // ถ้าเพิ่งสร้างรายงานในเซสชันนี้ ให้รับรู้รหัสของตัวเองด้วย (สาธิตให้ครบวง)
-  useEffect(() => {
-    const o = loadOrder()
-    if (o?.accessCode) setOwnCode(o.accessCode)
-  }, [])
-
-  function openReport(finalCode: string) {
+  async function open(finalCode: string, finalPin?: string) {
     setOpening(true)
-    saveOpenedCode(finalCode)
-    router.push('/report')
-  }
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const raw = code.replace(/-/g, '')
-    if (raw.length !== 11 || !raw.startsWith('PJX')) {
-      setError('รูปแบบรหัสไม่ถูกต้อง — ต้องเป็น PJX-XXXX-XXXX')
-      return
-    }
     setError(null)
-    const known = DEMO_CODES[code]
-    // รหัสที่ระบบ "รู้จัก": ตัวอย่างสาธิต หรือรหัสของออเดอร์ในเซสชันนี้
-    if (known?.pin) {
-      setPinFor(code)
-      return
+    try {
+      const order = await client.findOrderByCode(finalCode, finalPin)
+      saveCurrentOrder(order)
+      router.push('/report')
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'เปิดรายงานไม่สำเร็จ'
+      // รายงานที่ล็อกด้วย PIN จะแจ้งกลับมาแบบนี้ — เปลี่ยนไปหน้ากรอก PIN แทนการฟ้อง error
+      if (message.includes('PIN') && !needsPin) {
+        setNeedsPin(true)
+        setError(null)
+      } else {
+        setError(message)
+      }
+      setOpening(false)
     }
-    // เดโม: รับทุกรหัสที่รูปแบบถูกต้อง (ถือว่าเปิดได้) — โชว์ว่าลูกค้าเก่ากดดูได้ทันที
-    openReport(code)
-  }
-
-  function onPinSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!pinFor) return
-    const expected = DEMO_CODES[pinFor]?.pin
-    if (pin !== expected) {
-      setError('PIN ไม่ถูกต้อง (สาธิต)')
-      return
-    }
-    setError(null)
-    openReport(pinFor)
   }
 
   return (
@@ -91,20 +54,31 @@ export default function OpenReportPage() {
             เปิดรายงานด้วยรหัส <span className="cjk text-gold">命合</span>
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-            ซื้อไปแล้ว? กรอก “รหัสเปิดรายงาน” ที่ได้รับตอนสั่งซื้อ
-            เพื่อเข้าดูรายงานฉบับเดิมได้ทุกเมื่อ
+            ซื้อไปแล้ว? กรอก “รหัสเปิดรายงาน” ที่ได้รับตอนสั่งซื้อ เพื่อเข้าดูรายงานฉบับเดิมได้ทุกเมื่อ
           </p>
         </div>
 
         <div className="card mt-8 p-6">
-          {!pinFor ? (
-            <form onSubmit={onSubmit} className="space-y-4" noValidate>
+          {!needsPin ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                const raw = code.replace(/-/g, '')
+                if (raw.length !== 11 || !raw.startsWith('PJX')) {
+                  setError('รูปแบบรหัสไม่ถูกต้อง — ต้องเป็น PJX-XXXX-XXXX')
+                  return
+                }
+                void open(code)
+              }}
+              className="space-y-4"
+              noValidate
+            >
               <label className="block">
                 <span className="field-label">รหัสเปิดรายงาน</span>
                 <input
                   value={code}
                   onChange={(e) => {
-                    setCode(formatAsTyping(e.target.value))
+                    setCode(formatAccessCode(e.target.value))
                     if (error) setError(null)
                   }}
                   placeholder="PJX-XXXX-XXXX"
@@ -129,10 +103,17 @@ export default function OpenReportPage() {
               </button>
             </form>
           ) : (
-            <form onSubmit={onPinSubmit} className="space-y-4" noValidate>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                void open(code, pin)
+              }}
+              className="space-y-4"
+              noValidate
+            >
               <div className="rounded-lg bg-cloud px-4 py-2.5 text-center">
                 <div className="text-[10px] uppercase tracking-wider text-muted">กำลังเปิด</div>
-                <div className="font-body-en text-sm font-semibold tracking-wider text-ink">{pinFor}</div>
+                <div className="font-body-en text-sm font-semibold tracking-wider text-ink">{code}</div>
               </div>
               <label className="block">
                 <span className="field-label">กรอก PIN เพื่อยืนยัน</span>
@@ -155,7 +136,7 @@ export default function OpenReportPage() {
                   <span className="mt-1.5 block text-xs font-semibold text-el-fire">{error}</span>
                 ) : (
                   <span className="mt-1.5 block text-xs text-muted">
-                    รายงานฉบับนี้ป้องกันด้วย PIN เพิ่มอีกชั้น (สาธิต: 1988)
+                    รายงานฉบับนี้ป้องกันด้วย PIN เพิ่มอีกชั้น
                   </span>
                 )}
               </label>
@@ -164,7 +145,7 @@ export default function OpenReportPage() {
                   type="button"
                   className="btn-ghost !py-2.5 text-sm"
                   onClick={() => {
-                    setPinFor(null)
+                    setNeedsPin(false)
                     setPin('')
                     setError(null)
                   }}
@@ -178,48 +159,36 @@ export default function OpenReportPage() {
             </form>
           )}
 
-          <div className="gold-divider my-5" />
-
-          <div className="text-xs text-muted">
-            <div className="mb-2 font-medium text-ink-soft">รหัสตัวอย่างสำหรับสาธิต — คลิกเพื่อกรอกอัตโนมัติ</div>
-            <div className="flex flex-col gap-1.5">
-              {ownCode && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCode(ownCode)
-                    setPinFor(null)
-                    setError(null)
-                  }}
-                  className="chip justify-start text-left hover:border-gold/50"
-                >
-                  <span className="font-body-en tracking-wider text-ink">{ownCode}</span>
-                  <span>· รายงานที่คุณเพิ่งสร้าง</span>
-                </button>
-              )}
-              {Object.entries(DEMO_CODES).map(([c, meta]) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => {
-                    setCode(c)
-                    setPinFor(null)
-                    setError(null)
-                  }}
-                  className="chip justify-start text-left hover:border-gold/50"
-                >
-                  <span className="font-body-en tracking-wider text-ink">{c}</span>
-                  <span>· {meta.label}</span>
-                  {meta.pin && <span className="text-gold">🔒 PIN</span>}
-                </button>
-              ))}
-            </div>
-          </div>
+          {IS_MOCK && (
+            <>
+              <div className="gold-divider my-5" />
+              <div className="text-xs text-muted">
+                <div className="mb-2 font-medium text-ink-soft">
+                  โหมดสาธิต — รหัสตัวอย่าง คลิกเพื่อกรอกอัตโนมัติ
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {DEMO_CODES.map((demo) => (
+                    <button
+                      key={demo.code}
+                      type="button"
+                      onClick={() => {
+                        setCode(demo.code)
+                        setNeedsPin(false)
+                        setError(null)
+                      }}
+                      className="chip justify-start text-left hover:border-gold/50"
+                    >
+                      <span className="font-body-en tracking-wider text-ink">{demo.code}</span>
+                      <span>· {demo.label}</span>
+                      {demo.pin && <span className="text-gold">🔒 PIN {demo.pin}</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        <p className="mt-6 text-center text-xs text-muted">
-          เวอร์ชันสาธิต — จำลองการเปิดรายงานในเครื่อง ไม่มีการเชื่อมต่อฐานข้อมูลจริง
-        </p>
         <p className="mt-4 text-center text-sm">
           <Link href="/" className="text-ink-soft transition-colors hover:text-gold">
             ← กลับหน้าแรก
@@ -229,3 +198,10 @@ export default function OpenReportPage() {
     </main>
   )
 }
+
+/** ตรงกับประวัติตัวอย่างใน lib/api/mock-client.ts */
+const DEMO_CODES = [
+  { code: 'PJX-K7QM-3PLA', label: 'คุณวีรภัทร × ผู้บริหาร' },
+  { code: 'PJX-2XKD-9MRT', label: 'บมจ. รุ่งเรืองโลจิสติกส์' },
+  { code: 'PJX-9WDC-XR2E', label: 'คุณปาริชาต × บจก. มงคลเทรด', pin: '1988' },
+]

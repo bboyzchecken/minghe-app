@@ -176,8 +176,11 @@ func (s *Server) GoogleLogin(c echo.Context) error {
 	if err := c.Validate(&body); err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, err)
 	}
-	if s.Config.OAuth.GoogleClientID == "" {
-		return c.JSON(http.StatusNotImplemented, request.Err("google sign-in is not configured"))
+	// ปิดไว้โดยตั้งใจในเฟสนี้ — ปุ่มบนหน้าเว็บยังแสดงอยู่แต่กดไม่ได้
+	// เปิดได้เมื่อได้ OAuth client จริงแล้ว โดยตั้ง MINGHE_GOOGLE_LOGIN_ENABLED=true (F-02)
+	if !s.Config.GoogleLoginEnabled || s.Config.OAuth.GoogleClientID == "" {
+		return c.JSON(http.StatusNotImplemented,
+			request.Err("การเข้าสู่ระบบด้วย Google ยังไม่เปิดใช้งาน"))
 	}
 
 	payload, err := idtoken.Validate(context.Background(), body.IDToken, s.Config.OAuth.GoogleClientID)
@@ -203,7 +206,7 @@ func (s *Server) GoogleLogin(c echo.Context) error {
 		existing, findErr := s.UserStore.FindByEmail(email)
 		if findErr == nil {
 			now := time.Now()
-			existing.GoogleID = googleID
+			existing.GoogleID = &googleID
 			if existing.EmailVerifiedAt == nil {
 				existing.EmailVerifiedAt = &now
 			}
@@ -220,7 +223,7 @@ func (s *Server) GoogleLogin(c echo.Context) error {
 				Email:           email,
 				Name:            str.Coalesce(name, email),
 				Provider:        models.ProviderGoogle,
-				GoogleID:        googleID,
+				GoogleID:        &googleID,
 				AvatarURL:       picture,
 				EmailVerifiedAt: &now,
 				Role:            models.RoleUser,

@@ -3,7 +3,7 @@
 import { INDUSTRIES } from '@minghe/core'
 import type { GenerateReportInput, OrgInput } from '@minghe/report/types'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BirthFields, Field, Select, TextInput, emptyBirth, type BirthValue } from '@/components/forms'
 import { ConsentCheckbox } from '@/components/consent-checkbox'
 import { DateInput } from '@/components/date-input'
@@ -11,7 +11,28 @@ import { ElementIcon } from '@/components/element-icon'
 import { Stepper, type StepDef } from '@/components/stepper'
 import { ELEMENT_META } from '@/lib/brand'
 import { thb } from '@/lib/pricing'
-import { generateAccessCode, saveOrder, type PriceLine } from '@/lib/store'
+import { client } from '@/lib/api'
+import { rememberReturnTo, useSession } from '@/lib/session'
+import { clearWizardDraft, loadWizardDraft, saveCurrentOrder, saveWizardDraft } from '@/lib/store'
+
+const DRAFT_KEY = 'jobseeker'
+
+interface PriceLine {
+  label: string
+  amount: number
+}
+
+interface Draft {
+  step: number
+  me: BirthValue
+  companyMode: 'company-date' | 'industry'
+  companyName: string
+  foundingDate: string
+  industryId: string
+  direction: string
+  size: string
+  billing: 'payperview' | 'subscription'
+}
 
 const STEPS: StepDef[] = [
   { label: 'ข้อมูลของคุณ', element: 'metal' },
@@ -24,8 +45,10 @@ const DIRECTIONS = ['เหนือ', 'ใต้', 'ตะวันออก', 
 
 export default function JobSeekerWizard() {
   const router = useRouter()
+  const { user, token, loading: sessionLoading } = useSession()
   const [step, setStep] = useState(0)
   const [generating, setGenerating] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
 
   const [me, setMe] = useState<BirthValue>({ ...emptyBirth })
   const [companyMode, setCompanyMode] = useState<'company-date' | 'industry'>('company-date')
@@ -36,6 +59,22 @@ export default function JobSeekerWizard() {
   const [size, setSize] = useState('')
   const [billing, setBilling] = useState<'payperview' | 'subscription'>('payperview')
   const [consented, setConsented] = useState(false)
+
+  // กู้ร่างที่กรอกค้างไว้ กรณีถูกพาไปหน้าล็อกอินกลางคัน (F-03)
+  useEffect(() => {
+    const draft = loadWizardDraft<Draft>(DRAFT_KEY)
+    if (!draft) return
+    setStep(draft.step)
+    setMe(draft.me)
+    setCompanyMode(draft.companyMode)
+    setCompanyName(draft.companyName)
+    setFoundingDate(draft.foundingDate)
+    setIndustryId(draft.industryId)
+    setDirection(draft.direction)
+    setSize(draft.size)
+    setBilling(draft.billing)
+    clearWizardDraft(DRAFT_KEY)
+  }, [])
 
   const meOk = me.birthDate !== '' && me.birthTime !== ''
   const companyOk = companyMode === 'company-date' ? foundingDate !== '' : industryId !== ''
@@ -67,18 +106,51 @@ export default function JobSeekerWizard() {
     }
   }
 
-  function confirm() {
-    if (!consented) return
+  /** ป้ายกำกับบริษัท ใช้ในประวัติที่ dashboard */
+  function orgLabel(): string {
+    if (companyName) return companyName
+    if (companyMode === 'industry') {
+      return `ธาตุอุตสาหกรรม: ${INDUSTRIES.find((i) => i.id === industryId)?.th ?? '-'}`
+    }
+    return 'บริษัทที่สนใจ'
+  }
+
+  async function confirm() {
+    if (!consented || !token) return
     setGenerating(true)
-    saveOrder({
-      product: 'jobseeker',
-      input: buildInput(),
-      priceLines,
-      total,
-      accessCode: generateAccessCode(),
-      createdAt: new Date().toISOString(),
+    setCheckoutError(null)
+
+    try {
+      const order = await client.createOrder(token, {
+        product: 'jobseeker',
+        total,
+        input: buildInput(),
+        orgLabel: orgLabel(),
+        orgMode: companyMode,
+      })
+      saveCurrentOrder(order)
+      router.push('/report')
+    } catch (e) {
+      setCheckoutError(e instanceof Error ? e.message : 'สั่งซื้อไม่สำเร็จ')
+      setGenerating(false)
+    }
+  }
+
+  /** F-03 — เล่นโฟลว์ได้ก่อน แต่ต้องล็อกอินก่อนชำระเงิน */
+  function goToLogin() {
+    saveWizardDraft(DRAFT_KEY, {
+      step,
+      me,
+      companyMode,
+      companyName,
+      foundingDate,
+      industryId,
+      direction,
+      size,
+      billing,
     })
-    setTimeout(() => router.push('/report'), 1600)
+    rememberReturnTo('/jobseeker/new')
+    router.push('/login')
   }
 
   return (
@@ -209,12 +281,27 @@ export default function JobSeekerWizard() {
                 </div>
                 <div className="font-display-th text-lg text-ink">เครื่องคำนวณกำลังตั้งเสาสี่ต้น…</div>
               </div>
+            ) : sessionLoading ? (
+              <div className="mt-6 h-14 animate-pulse rounded-lg bg-paper-warm" aria-hidden="true" />
+            ) : !user ? (
+              <LoginGate onLogin={goToLogin} />
             ) : (
               <>
+                <div className="mt-6 rounded-lg border border-line bg-cloud px-4 py-3 text-sm text-ink-soft">
+                  ชำระเงินในนาม <span className="font-medium text-ink">{user.name}</span> ({user.email})
+                </div>
+
                 {/* F-06 — กล่องยินยอมต้องถูกติ๊กก่อนจึงจะชำระเงินได้ */}
                 <ConsentCheckbox checked={consented} onChange={setConsented} />
+
+                {checkoutError && (
+                  <p className="mt-4 rounded-lg border border-terracotta/40 bg-terracotta/[0.07] px-4 py-2.5 text-sm text-terracotta">
+                    {checkoutError}
+                  </p>
+                )}
+
                 <button
-                  onClick={confirm}
+                  onClick={() => void confirm()}
                   disabled={!consented}
                   className="btn-primary mt-4 w-full py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -246,6 +333,25 @@ export default function JobSeekerWizard() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * F-03 — ผู้ใช้กรอกฟอร์มได้โดยไม่ต้องล็อกอิน แต่ต้องมีบัญชีก่อนชำระเงิน
+ */
+function LoginGate({ onLogin }: { onLogin: () => void }) {
+  return (
+    <div className="mt-6 rounded-xl border border-gold/40 bg-gold/[0.06] p-6 text-center">
+      <div className="font-medium text-ink">ต้องเข้าสู่ระบบก่อนชำระเงิน</div>
+      <p className="mx-auto mt-2 max-w-sm text-sm text-ink-soft">
+        เพื่อให้รายงานผูกกับบัญชีของคุณ เปิดดูย้อนหลังได้ทุกเมื่อ
+        และระบบจำข้อมูลที่กรอกไว้ให้ในครั้งถัดไป
+      </p>
+      <button onClick={onLogin} className="btn-primary mt-5 px-8">
+        เข้าสู่ระบบ / สมัครสมาชิก
+      </button>
+      <p className="mt-3 text-xs text-muted">ข้อมูลที่กรอกไว้จะยังอยู่เมื่อกลับมา</p>
     </div>
   )
 }

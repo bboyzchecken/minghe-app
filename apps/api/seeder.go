@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -12,51 +13,134 @@ import (
 	"github.com/minghe/api/pkg/utils/dateutil"
 )
 
-// seed สร้างข้อมูลตั้งต้นสำหรับการพัฒนา
+// seed สร้างข้อมูลตั้งต้น — เรียกด้วยคำสั่ง `go run . seed`
 //
 // ตั้งใจไม่ publish เอกสารกฎหมาย — สร้างเป็นฉบับร่างเปล่าไว้เท่านั้น
 // เนื้อหาจริงต้องผ่านการตรวจก่อน (F-01) ห้าม seed ข้อความกฎหมายที่แต่งขึ้นเอง
 func seed(db *gorm.DB, config core.Config) error {
-	if err := seedAdmin(db); err != nil {
+	if err := ensureUser(db, adminAccount()); err != nil {
 		return err
 	}
 	if err := seedLegalPlaceholders(db); err != nil {
 		return err
 	}
-	return seedDemoOrg(db)
+	if err := seedDemoOrg(db); err != nil {
+		return err
+	}
+	if config.IsMock() {
+		return ensureMockAccounts(db)
+	}
+	logger.Info("โหมด live — ข้ามการสร้างบัญชีทดลอง")
+	return nil
 }
 
-func seedAdmin(db *gorm.DB) error {
-	var count int64
-	if err := db.Model(&models.User{}).Where("role = ?", models.RoleAdmin).Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		logger.Info("admin already exists, skipping")
+// ensureMockData รันอัตโนมัติทุกครั้งที่ service เริ่มทำงานในโหมด mock
+//
+// จุดประสงค์คือ "สลับ MINGHE_MODE=mock แล้วใช้ได้เลย" ไม่ต้องจำว่าต้อง seed ก่อน
+// ในโหมด live ฟังก์ชันนี้ไม่ทำอะไรเลย — บัญชีทดลองจะไม่ถูกสร้างเด็ดขาด
+func ensureMockData(db *gorm.DB, config core.Config) error {
+	if !config.IsMock() {
 		return nil
 	}
-
-	hash, err := request.HashPassword("changeme1234")
-	if err != nil {
+	if err := ensureUser(db, adminAccount()); err != nil {
 		return err
+	}
+	if err := seedLegalPlaceholders(db); err != nil {
+		return err
+	}
+	if err := seedDemoOrg(db); err != nil {
+		return err
+	}
+	return ensureMockAccounts(db)
+}
+
+func adminAccount() models.MockAccount {
+	for _, a := range models.MockAccounts() {
+		if a.Role == models.RoleAdmin {
+			return a
+		}
+	}
+	return models.MockAccount{}
+}
+
+// ensureUser สร้างผู้ใช้ถ้ายังไม่มี และไม่แตะรหัสผ่านเดิมถ้ามีอยู่แล้ว
+// (เผื่อผู้ใช้เปลี่ยนรหัสผ่านของ admin ไปแล้ว จะได้ไม่ถูกรีเซ็ตกลับทุกครั้งที่ start)
+func ensureUser(db *gorm.DB, account models.MockAccount) error {
+	var existing models.User
+	err := db.Where("email = ?", account.Email).First(&existing).Error
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	hash, hashErr := request.HashPassword(account.Password)
+	if hashErr != nil {
+		return hashErr
 	}
 	now := time.Now()
 
-	admin := &models.User{
-		Email:           "admin@minghe.work",
+	user := &models.User{
+		Email:           account.Email,
 		PasswordHash:    hash,
-		Name:            "ผู้ดูแลระบบ",
+		Name:            account.Name,
 		Provider:        models.ProviderEmail,
 		EmailVerifiedAt: &now,
-		Role:            models.RoleAdmin,
+		Role:            account.Role,
 		Status:          models.StatusActive,
 		Locale:          "th",
 	}
-	if err := db.Create(admin).Error; err != nil {
+	if err := db.Create(user).Error; err != nil {
 		return err
 	}
 
-	logger.Warn("seeded admin admin@minghe.work / changeme1234 — เปลี่ยนรหัสผ่านทันทีหลังใช้งานครั้งแรก")
+	if account.Role == models.RoleAdmin {
+		logger.Warn("สร้างบัญชีผู้ดูแล ", account.Email, " / ", account.Password,
+			" — เปลี่ยนรหัสผ่านทันทีหลังใช้งานครั้งแรก")
+	} else {
+		logger.Info("สร้างบัญชีทดลอง ", account.Email)
+	}
+	return nil
+}
+
+// ensureMockAccounts สร้างบัญชีทดลองทุกฝั่ง แล้วผูกบัญชีฝั่งองค์กรเข้ากับองค์กรตัวอย่าง
+func ensureMockAccounts(db *gorm.DB) error {
+	var org models.Organization
+	if err := db.Order("id ASC").First(&org).Error; err != nil {
+		return err
+	}
+
+	for _, account := range models.MockAccounts() {
+		if err := ensureUser(db, account); err != nil {
+			return err
+		}
+		if account.OrgRole == "" {
+			continue
+		}
+
+		var user models.User
+		if err := db.Where("email = ?", account.Email).First(&user).Error; err != nil {
+			return err
+		}
+
+		var member models.OrganizationMember
+		err := db.Where("organization_id = ? AND user_id = ?", org.ID, user.ID).First(&member).Error
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err := db.Create(&models.OrganizationMember{
+			OrganizationID: org.ID,
+			UserID:         user.ID,
+			Role:           account.OrgRole,
+			Status:         models.StatusActive,
+		}).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -104,7 +188,6 @@ func seedDemoOrg(db *gorm.DB) error {
 		return err
 	}
 	if count > 0 {
-		logger.Info("demo organization already exists, skipping")
 		return nil
 	}
 
@@ -193,6 +276,6 @@ func seedDemoOrg(db *gorm.DB) error {
 		}
 	}
 
-	logger.Info("seeded demo organization with 1 team / 3 profiles")
+	logger.Info("สร้างองค์กรตัวอย่าง 1 แห่ง · ทีม 1 ทีม · โปรไฟล์ 3 คน")
 	return nil
 }

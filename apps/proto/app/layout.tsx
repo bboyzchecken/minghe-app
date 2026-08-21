@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
 import { Cormorant_Garamond, Inter, Noto_Serif_SC, Sacramento, Sarabun, Trirong } from 'next/font/google'
 import './globals.css'
+import { ModeBanner } from '@/components/mode-banner'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
+import { SessionProvider } from '@/lib/session'
 
 const trirong = Trirong({
   subsets: ['thai', 'latin'],
@@ -53,9 +55,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${trirong.variable} ${sarabun.variable} ${cormorant.variable} ${inter.variable} ${sacramento.variable} ${notoSerifSC.variable} min-h-screen bg-paper font-body-th text-ink antialiased texture-paper`}
       >
-        <SiteHeader />
-        <main>{children}</main>
-        <SiteFooter />
+        <SessionProvider>
+          <ModeBanner />
+          <SiteHeader />
+          <main>{children}</main>
+          <SiteFooter />
+        </SessionProvider>
       </body>
     </html>
   )

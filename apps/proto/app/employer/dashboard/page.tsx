@@ -1,52 +1,63 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useState } from 'react'
 import { ElementIcon } from '@/components/element-icon'
-import { loadOrder, type StoredOrder } from '@/lib/store'
+import { RequireLogin } from '@/components/require-login'
+import { RoleBadge } from '@/components/role-badge'
+import { RoleCapabilities } from '@/components/role-capabilities'
+import { client, type OrderRecord } from '@/lib/api'
+import { IS_MOCK } from '@/lib/env'
+import { useSession } from '@/lib/session'
 import { thb } from '@/lib/pricing'
+import { saveCurrentOrder } from '@/lib/store'
 
-interface Row {
-  code: string
-  subject: string
-  org: string
-  score: number
-  status: 'ready' | 'pending_review' | 'interpreting'
-  date: string
+export default function EmployerDashboardPage() {
+  return (
+    <RequireLogin path="/employer/dashboard">
+      <EmployerDashboard />
+    </RequireLogin>
+  )
 }
 
-const MOCK_ROWS: Row[] = [
-  { code: 'PJX-K7QM-3PLA', subject: 'วีรภัทร', org: 'ผู้บริหาร (คุณบัส)', score: 78, status: 'ready', date: '30 ก.ค. 2026' },
-  { code: 'PJX-9WDC-XR2E', subject: 'ปาริชาต', org: 'บจก. มงคลเทรด', score: 64, status: 'ready', date: '28 ก.ค. 2026' },
-  { code: 'PJX-4HNB-QT8K', subject: 'ธนกร', org: 'อุตสาหกรรม: โลจิสติกส์', score: 0, status: 'pending_review', date: '31 ก.ค. 2026' },
-]
+function EmployerDashboard() {
+  const router = useRouter()
+  const { user, token } = useSession()
+  const [orders, setOrders] = useState<OrderRecord[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-const STATUS_LABEL: Record<Row['status'], { th: string; color: string }> = {
-  ready: { th: 'พร้อมแล้ว', color: '#7B8B57' },
-  pending_review: { th: 'รอซินแสตรวจ', color: '#BE8A2E' },
-  interpreting: { th: 'กำลังตีความ', color: '#5E9BB5' },
-}
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
 
-export default function EmployerDashboard() {
-  const [order, setOrder] = useState<StoredOrder | null>(null)
-  useEffect(() => setOrder(loadOrder()), [])
+    client
+      .listOrders(token, 'employer')
+      .then((list) => {
+        if (!cancelled) setOrders(list)
+      })
+      .catch((e: Error) => {
+        if (!cancelled) {
+          setError(e.message)
+          setOrders([])
+        }
+      })
 
-  const rows: Row[] = [
-    ...(order?.product === 'employer'
-      ? [
-          {
-            code: order.accessCode,
-            subject: order.input.subject.name,
-            org: order.input.org.mode === 'executive' ? 'ผู้บริหาร' : order.input.org.mode === 'company-date' ? 'วันก่อตั้งบริษัท' : 'ธาตุอุตสาหกรรม',
-            score: 0,
-            status: 'ready' as const,
-            date: 'วันนี้',
-          },
-        ]
-      : []),
-    ...MOCK_ROWS,
-  ]
-  const used = rows.filter((r) => r.status === 'ready').length
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  const openReport = useCallback(
+    (order: OrderRecord) => {
+      saveCurrentOrder(order)
+      router.push('/report')
+    },
+    [router],
+  )
+
+  const rows = orders ?? []
+  const readyThisWeek = rows.filter((o) => o.status === 'ready').length
 
   return (
     <div className="container-page py-10 md:py-14">
@@ -54,84 +65,147 @@ export default function EmployerDashboard() {
         <div>
           <span className="eyebrow">Employer · Dashboard</span>
           <h1 className="mt-2 text-3xl">ภาพรวมองค์กร</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-soft">
+            {user?.organizationName ?? 'บัญชีองค์กร'} · เข้าใช้โดย {user?.name}
+            {user && <RoleBadge user={user} />}
+          </p>
         </div>
-        <Link href="/employer/new" className="btn-primary">+ วิเคราะห์ candidate ใหม่</Link>
+        <Link href="/employer/new" className="btn-primary">
+          + วิเคราะห์ candidate ใหม่
+        </Link>
       </div>
 
-      {/* stat cards */}
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard el="metal" label="โควตาสัปดาห์นี้" value={`${Math.min(used, 6)} / 6`} sub="รีเซ็ตทุกวันจันทร์" />
+        <StatCard el="metal" label="โควตาสัปดาห์นี้" value={`${Math.min(readyThisWeek, 6)} / 6`} sub="รีเซ็ตทุกวันจันทร์" />
         <StatCard el="water" label="สมาชิก" value="Employer 699" sub="ต่ออายุ 1 ส.ค. 2026" />
-        <StatCard el="wood" label="รายงานทั้งหมด" value={`${rows.length}`} sub="ตลอดการใช้งาน" />
-        <StatCard el="fire" label="ทีมในคลัง" value="5 คน" sub="Team Roster" />
+        <StatCard el="wood" label="รายงานทั้งหมด" value={orders ? String(rows.length) : '—'} sub="ตลอดการใช้งาน" />
+        <StatCard el="fire" label="ทีมในคลัง" value="3 คน" sub="Team Roster" />
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        {/* orders */}
         <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
           <h2 className="text-xl">ประวัติการวิเคราะห์</h2>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-muted">
-                  <th className="pb-2 font-medium">ผู้ถูกวิเคราะห์</th>
-                  <th className="pb-2 font-medium">ฝ่ายองค์กร</th>
-                  <th className="pb-2 font-medium">合</th>
-                  <th className="pb-2 font-medium">สถานะ</th>
-                  <th className="pb-2 font-medium">รหัสเปิด</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.code} className="border-b border-line/60 last:border-0">
-                    <td className="py-3 text-ink">คุณ{r.subject}</td>
-                    <td className="py-3 text-ink-soft">{r.org}</td>
-                    <td className="py-3 font-medium text-ink">{r.status === 'ready' && r.score ? r.score : '—'}</td>
-                    <td className="py-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: STATUS_LABEL[r.status].color }}>
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_LABEL[r.status].color }} />
-                        {STATUS_LABEL[r.status].th}
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      {r.status === 'ready' ? (
-                        <Link href="/report" className="font-body-en text-xs text-gold hover:underline">
-                          {r.code}
-                        </Link>
-                      ) : (
-                        <span className="font-body-en text-xs text-muted">{r.code}</span>
-                      )}
-                    </td>
+
+          {error && (
+            <p className="mt-4 rounded-lg border border-terracotta/40 bg-terracotta/[0.07] px-4 py-2.5 text-sm text-terracotta">
+              {error}
+            </p>
+          )}
+
+          {orders === null ? (
+            <div className="mt-4 space-y-2" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-11 animate-pulse rounded-lg bg-paper-warm" />
+              ))}
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="mt-6 rounded-lg border border-dashed border-line bg-paper-warm/40 p-8 text-center">
+              <p className="text-sm text-ink-soft">ยังไม่มีรายงาน — เริ่มวิเคราะห์ candidate คนแรกได้เลย</p>
+              <Link href="/employer/new" className="btn-ghost mt-4 !py-2 text-sm">
+                เริ่มวิเคราะห์
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-xs text-muted">
+                    <th className="pb-2 font-medium">ผู้ถูกวิเคราะห์</th>
+                    <th className="pb-2 font-medium">ฝ่ายองค์กร</th>
+                    <th className="pb-2 font-medium">ยอดชำระ</th>
+                    <th className="pb-2 font-medium">สถานะ</th>
+                    <th className="pb-2 font-medium">รหัสเปิด</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {rows.map((order) => (
+                    <tr key={order.code} className="border-b border-line/60 last:border-0">
+                      <td className="py-3 text-ink">{order.subjectName}</td>
+                      <td className="py-3 text-ink-soft">{order.orgLabel}</td>
+                      <td className="py-3 text-ink-soft">{thb(order.total)} ฿</td>
+                      <td className="py-3">
+                        <StatusChip status={order.status} />
+                      </td>
+                      <td className="py-3">
+                        {order.status === 'ready' ? (
+                          <button
+                            onClick={() => openReport(order)}
+                            className="font-body-en text-xs text-gold hover:underline"
+                          >
+                            {order.code}
+                          </button>
+                        ) : (
+                          <span className="font-body-en text-xs text-muted">{order.code}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
-        {/* profiles */}
         <div className="space-y-6">
+          {user && <RoleCapabilities user={user} />}
           <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
             <h2 className="text-lg">Profile Memory</h2>
             <div className="mt-3 space-y-3">
-              <ProfileRow icon="earth" title="Company Profile" detail="บจก. มงคลเทรด · ก่อตั้ง 2015 · โลจิสติกส์ (น้ำ)" />
-              <ProfileRow icon="water" title="Executive Profile" detail="คุณบัส · 3 พ.ย. 2523 · 06:30 กรุงเทพฯ" />
+              <ProfileRow icon="earth" title="Company Profile" detail="บจก. ตัวอย่างโลจิสติกส์ · ก่อตั้ง 14/03/2015 · โลจิสติกส์ (น้ำ)" />
+              <ProfileRow icon="water" title="Executive Profile" detail="สมชาย ผู้บริหาร · 13/09/1990 · 15:23 กรุงเทพฯ" />
             </div>
-            <button className="btn-ghost mt-4 w-full !py-2 text-sm">แก้ไขโปรไฟล์</button>
           </div>
           <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
             <h2 className="text-lg">Team Roster</h2>
             <div className="mt-3 flex flex-wrap gap-2">
-              {['ธนโชติ', 'ศิริพร', 'วีรภัทร', 'ปาริชาต', 'ธนกร'].map((n) => (
-                <span key={n} className="chip">{n}</span>
+              {['สมชาย ผู้บริหาร', 'ปิยะ หัวหน้าทีม', 'ณัฐ พนักงาน'].map((n) => (
+                <span key={n} className="chip">
+                  {n}
+                </span>
               ))}
             </div>
-            <button className="btn-ghost mt-4 w-full !py-2 text-sm">จัดการทีม</button>
+          </div>
+
+          {/* สมาชิกองค์กร — จุดที่เจ้าของกับ HR ต่างกันชัดที่สุด */}
+          <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
+            <h2 className="text-lg">สมาชิกองค์กร</h2>
+            <div className="mt-3 space-y-2">
+              <MemberRow name="คุณบัส" email="employer@demo.minghe.work" role="เจ้าของ" color="#b07d2b" />
+              <MemberRow name="คุณแนน" email="hr@demo.minghe.work" role="HR" color="#5E9BB5" />
+            </div>
+            {user?.orgRole === 'hr' ? (
+              <p className="mt-4 flex items-start gap-2 rounded-lg bg-paper-warm/60 px-3 py-2 text-xs text-muted">
+                <span>🔒</span>
+                การเพิ่ม/ลบสมาชิกสงวนไว้เฉพาะเจ้าของบัญชีองค์กร — ติดต่อคุณบัสหากต้องการเพิ่มคน
+              </p>
+            ) : (
+              <button className="btn-ghost mt-4 w-full !py-2 text-sm" title="ฟอร์มเชิญสมาชิกจะมาในรอบถัดไป">
+                + เชิญสมาชิกใหม่
+              </button>
+            )}
           </div>
         </div>
       </div>
-      <p className="mt-6 text-center text-xs text-muted">เวอร์ชันสาธิต — ข้อมูลบางส่วนเป็นตัวอย่าง (mock) ไม่ได้บันทึกจริง</p>
+
+      <p className="mt-6 text-center text-xs text-muted">
+        {IS_MOCK
+          ? 'โหมดสาธิต — ประวัติเก็บในเบราว์เซอร์เครื่องนี้'
+          : 'โหมดใช้งานจริง — ประวัติดึงจากฐานข้อมูลผ่าน API'}
+      </p>
     </div>
+  )
+}
+
+function StatusChip({ status }: { status: OrderRecord['status'] }) {
+  const meta =
+    status === 'ready'
+      ? { th: 'พร้อมแล้ว', color: '#7B8B57' }
+      : { th: 'รอชำระเงิน', color: '#BE8A2E' }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: meta.color }}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.color }} />
+      {meta.th}
+    </span>
   )
 }
 
@@ -144,6 +218,20 @@ function StatCard({ el, label, value, sub }: { el: 'metal' | 'water' | 'wood' | 
       </div>
       <div className="mt-2 text-2xl font-semibold text-ink">{value}</div>
       <div className="text-xs text-muted">{sub}</div>
+    </div>
+  )
+}
+
+function MemberRow({ name, email, role, color }: { name: string; email: string; role: string; color: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-paper-warm/50 px-3 py-2">
+      <div>
+        <div className="text-sm text-ink">{name}</div>
+        <div className="font-body-en text-[11px] text-muted">{email}</div>
+      </div>
+      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ color, background: `${color}14` }}>
+        {role}
+      </span>
     </div>
   )
 }

@@ -3,7 +3,7 @@
 import { INDUSTRIES } from '@minghe/core'
 import type { GenerateReportInput, OrgInput, TeamMemberInput } from '@minghe/report/types'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BirthFields, Field, Select, TextInput, emptyBirth, type BirthValue } from '@/components/forms'
 import { ConsentCheckbox } from '@/components/consent-checkbox'
 import { DateInput } from '@/components/date-input'
@@ -11,7 +11,30 @@ import { ElementIcon } from '@/components/element-icon'
 import { Stepper, type StepDef } from '@/components/stepper'
 import { ELEMENT_META } from '@/lib/brand'
 import { ADDONS, DEPTH_TIERS, SPEED_OPTIONS, TEAM_FREE_SEATS, teamExtraCost, thb } from '@/lib/pricing'
-import { generateAccessCode, saveOrder, type PriceLine } from '@/lib/store'
+import { client } from '@/lib/api'
+import { rememberReturnTo, useSession } from '@/lib/session'
+import { clearWizardDraft, loadWizardDraft, saveCurrentOrder, saveWizardDraft } from '@/lib/store'
+
+const DRAFT_KEY = 'employer'
+
+interface Draft {
+  step: number
+  subject: BirthValue
+  orgMode: OrgMode
+  exec: BirthValue
+  companyName: string
+  foundingDate: string
+  industryId: string
+  team: BirthValue[]
+  depth: 'standard' | 'premium' | 'executive'
+  speed: 'standard' | 'express'
+  addons: Record<AddonId, boolean>
+}
+
+interface PriceLine {
+  label: string
+  amount: number
+}
 
 const STEPS: StepDef[] = [
   { label: 'ผู้ถูกวิเคราะห์', element: 'metal' },
@@ -26,8 +49,10 @@ type AddonId = 'executive-analysis' | 'consult'
 
 export default function EmployerWizard() {
   const router = useRouter()
+  const { user, token, loading: sessionLoading } = useSession()
   const [step, setStep] = useState(0)
   const [generating, setGenerating] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
 
   const [subject, setSubject] = useState<BirthValue>({ ...emptyBirth })
   const [orgMode, setOrgMode] = useState<OrgMode>('executive')
@@ -41,6 +66,24 @@ export default function EmployerWizard() {
   const [depth, setDepth] = useState<'standard' | 'premium' | 'executive'>('premium')
   const [speed, setSpeed] = useState<'standard' | 'express'>('standard')
   const [addons, setAddons] = useState<Record<AddonId, boolean>>({ 'executive-analysis': false, consult: false })
+
+  // กู้ร่างที่กรอกค้างไว้ กรณีถูกพาไปหน้าล็อกอินกลางคัน (F-03)
+  useEffect(() => {
+    const draft = loadWizardDraft<Draft>(DRAFT_KEY)
+    if (!draft) return
+    setStep(draft.step)
+    setSubject(draft.subject)
+    setOrgMode(draft.orgMode)
+    setExec(draft.exec)
+    setCompanyName(draft.companyName)
+    setFoundingDate(draft.foundingDate)
+    setIndustryId(draft.industryId)
+    setTeam(draft.team)
+    setDepth(draft.depth)
+    setSpeed(draft.speed)
+    setAddons(draft.addons)
+    clearWizardDraft(DRAFT_KEY)
+  }, [])
 
   const depthTier = DEPTH_TIERS.find((d) => d.id === depth)!
   const teamExtra = teamExtraCost(team.length)
@@ -107,21 +150,53 @@ export default function EmployerWizard() {
     }
   }
 
-  function confirmPayment() {
-    if (!consented) return
+  /** ป้ายกำกับฝ่ายองค์กร ใช้ทั้งในหน้าตรวจทานและในประวัติที่ dashboard */
+  function orgLabel(): string {
+    if (orgMode === 'executive') return `ผู้บริหาร ${exec.name || '(ไม่ระบุ)'}`
+    if (orgMode === 'company-date') return companyName || 'บริษัท'
+    return `ธาตุอุตสาหกรรม: ${INDUSTRIES.find((i) => i.id === industryId)?.th ?? '-'}`
+  }
+
+  async function confirmPayment() {
+    if (!consented || !token) return
     setGenerating(true)
-    const order = {
-      product: 'employer' as const,
-      input: buildInput(),
-      priceLines,
-      total,
-      accessCode: generateAccessCode(),
-      express: speed === 'express',
-      createdAt: new Date().toISOString(),
+    setCheckoutError(null)
+
+    try {
+      const order = await client.createOrder(token, {
+        product: 'employer',
+        depth,
+        express: speed === 'express',
+        total,
+        input: buildInput(),
+        orgLabel: orgLabel(),
+        orgMode,
+      })
+      saveCurrentOrder(order)
+      router.push('/report')
+    } catch (e) {
+      setCheckoutError(e instanceof Error ? e.message : 'สั่งซื้อไม่สำเร็จ')
+      setGenerating(false)
     }
-    saveOrder(order)
-    // จำลองเวลา "ตั้งเสาสี่ต้น" ก่อนเปิดรายงาน
-    setTimeout(() => router.push('/report'), 1800)
+  }
+
+  /** F-03 — เล่นโฟลว์ได้ก่อน แต่ต้องล็อกอินก่อนชำระเงิน (เก็บร่างไว้ให้ครบก่อนออกจากหน้า) */
+  function goToLogin() {
+    saveWizardDraft(DRAFT_KEY, {
+      step,
+      subject,
+      orgMode,
+      exec,
+      companyName,
+      foundingDate,
+      industryId,
+      team,
+      depth,
+      speed,
+      addons,
+    })
+    rememberReturnTo('/employer/new')
+    router.push('/login')
   }
 
   return (
@@ -319,12 +394,27 @@ export default function EmployerWizard() {
                 <div className="font-display-th text-lg text-ink">เครื่องคำนวณกำลังตั้งเสาสี่ต้น…</div>
                 <div className="text-sm text-muted">เพื่อส่งให้ซินแสตรวจสอบและตีความ</div>
               </div>
+            ) : sessionLoading ? (
+              <div className="mt-6 h-14 animate-pulse rounded-lg bg-paper-warm" aria-hidden="true" />
+            ) : !user ? (
+              <LoginGate onLogin={goToLogin} />
             ) : (
               <>
+                <div className="mt-4 rounded-lg border border-line bg-cloud px-4 py-3 text-sm text-ink-soft">
+                  ชำระเงินในนาม <span className="font-medium text-ink">{user.name}</span> ({user.email})
+                </div>
+
                 {/* F-06 — กล่องยินยอมต้องถูกติ๊กก่อนจึงจะชำระเงินได้ */}
                 <ConsentCheckbox checked={consented} onChange={setConsented} />
+
+                {checkoutError && (
+                  <p className="mt-4 rounded-lg border border-terracotta/40 bg-terracotta/[0.07] px-4 py-2.5 text-sm text-terracotta">
+                    {checkoutError}
+                  </p>
+                )}
+
                 <button
-                  onClick={confirmPayment}
+                  onClick={() => void confirmPayment()}
                   disabled={!consented}
                   className="btn-primary mt-4 w-full py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -357,6 +447,26 @@ export default function EmployerWizard() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * F-03 — ผู้ใช้กรอกฟอร์มได้โดยไม่ต้องล็อกอิน แต่ต้องมีบัญชีก่อนชำระเงิน
+ * ข้อมูลที่กรอกไว้ยังอยู่ครบเมื่อกลับมา เพราะ wizard ไม่ได้ถูก unmount
+ */
+function LoginGate({ onLogin }: { onLogin: () => void }) {
+  return (
+    <div className="mt-6 rounded-xl border border-gold/40 bg-gold/[0.06] p-6 text-center">
+      <div className="font-medium text-ink">ต้องเข้าสู่ระบบก่อนชำระเงิน</div>
+      <p className="mx-auto mt-2 max-w-sm text-sm text-ink-soft">
+        เพื่อให้รายงานผูกกับบัญชีของคุณ เปิดดูย้อนหลังได้ทุกเมื่อ
+        และระบบจำข้อมูลที่กรอกไว้ให้ในครั้งถัดไป
+      </p>
+      <button onClick={onLogin} className="btn-primary mt-5 px-8">
+        เข้าสู่ระบบ / สมัครสมาชิก
+      </button>
+      <p className="mt-3 text-xs text-muted">ข้อมูลที่กรอกไว้จะยังอยู่เมื่อกลับมา</p>
     </div>
   )
 }
