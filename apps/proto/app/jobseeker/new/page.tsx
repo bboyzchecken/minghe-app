@@ -5,6 +5,8 @@ import type { GenerateReportInput, OrgInput } from '@minghe/report/types'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { BirthFields, Field, Select, TextInput, emptyBirth, type BirthValue } from '@/components/forms'
+import { ConsentCheckbox } from '@/components/consent-checkbox'
+import { DateInput } from '@/components/date-input'
 import { ElementIcon } from '@/components/element-icon'
 import { Stepper, type StepDef } from '@/components/stepper'
 import { ELEMENT_META } from '@/lib/brand'
@@ -33,6 +35,7 @@ export default function JobSeekerWizard() {
   const [direction, setDirection] = useState('')
   const [size, setSize] = useState('')
   const [billing, setBilling] = useState<'payperview' | 'subscription'>('payperview')
+  const [consented, setConsented] = useState(false)
 
   const meOk = me.birthDate !== '' && me.birthTime !== ''
   const companyOk = companyMode === 'company-date' ? foundingDate !== '' : industryId !== ''
@@ -65,6 +68,7 @@ export default function JobSeekerWizard() {
   }
 
   function confirm() {
+    if (!consented) return
     setGenerating(true)
     saveOrder({
       product: 'jobseeker',
@@ -126,8 +130,8 @@ export default function JobSeekerWizard() {
                 <TextInput value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="เช่น บมจ. รุ่งเรืองโลจิสติกส์" />
               </Field>
               {companyMode === 'company-date' ? (
-                <Field label="วันก่อตั้ง (ค.ศ.)" className="sm:col-span-2">
-                  <TextInput type="date" value={foundingDate} onChange={(e) => setFoundingDate(e.target.value)} />
+                <Field label="วัน/เดือน/ปี ก่อตั้ง (ค.ศ.)" hint="ตัวอย่าง: 31/01/1990" className="sm:col-span-2">
+                  <DateInput value={foundingDate} onChange={setFoundingDate} />
                 </Field>
               ) : (
                 <Field label="ประเภทอุตสาหกรรม" className="sm:col-span-2">
@@ -206,9 +210,22 @@ export default function JobSeekerWizard() {
                 <div className="font-display-th text-lg text-ink">เครื่องคำนวณกำลังตั้งเสาสี่ต้น…</div>
               </div>
             ) : (
-              <button onClick={confirm} className="btn-primary mt-6 w-full py-4 text-base">
-                ยืนยันชำระ {thb(total)} บาท และดูผล
-              </button>
+              <>
+                {/* F-06 — กล่องยินยอมต้องถูกติ๊กก่อนจึงจะชำระเงินได้ */}
+                <ConsentCheckbox checked={consented} onChange={setConsented} />
+                <button
+                  onClick={confirm}
+                  disabled={!consented}
+                  className="btn-primary mt-4 w-full py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ยืนยันชำระ {thb(total)} บาท และดูผล
+                </button>
+                {!consented && (
+                  <p className="mt-3 text-center text-xs text-muted">
+                    กรุณาติ๊กยอมรับเงื่อนไขก่อนดำเนินการชำระเงิน
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}

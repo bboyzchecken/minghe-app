@@ -22,7 +22,7 @@ export function SiteFooter() {
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-8 text-sm sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-6 text-sm sm:grid-cols-4">
             <div>
               <div className="mb-2 font-medium text-ink">ผลิตภัณฑ์</div>
               <ul className="space-y-1.5 text-ink-soft">
@@ -41,8 +41,21 @@ export function SiteFooter() {
             <div>
               <div className="mb-2 font-medium text-ink">ข้อมูล</div>
               <ul className="space-y-1.5 text-ink-soft">
-                <li><span className="text-muted">PDPA / ความเป็นส่วนตัว</span></li>
-                <li><span className="text-muted">ข้อตกลงการใช้งาน</span></li>
+                <li><Link href="/legal/privacy" className="hover:text-gold">นโยบายความเป็นส่วนตัว (PDPA)</Link></li>
+                <li><Link href="/legal/terms" className="hover:text-gold">เงื่อนไขการใช้งาน</Link></li>
+                <li><Link href="/legal/refund" className="hover:text-gold">การคืนเงิน / ลบบัญชี</Link></li>
+                <li><Link href="/legal/cookies" className="hover:text-gold">นโยบายคุกกี้</Link></li>
+              </ul>
+            </div>
+            <div>
+              {/* F-19 — อีเมลติดต่อตามสไลด์หน้า 10 */}
+              <div className="mb-2 font-medium text-ink">ติดต่อ</div>
+              <ul className="space-y-1.5 text-ink-soft">
+                <li>
+                  <a href="mailto:info@minghe.work" className="hover:text-gold">
+                    info@minghe.work
+                  </a>
+                </li>
               </ul>
             </div>
           </div>

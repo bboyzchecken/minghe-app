@@ -1,6 +1,7 @@
 'use client'
 
 import { THAI_PROVINCES } from '@minghe/core'
+import { DateInput } from './date-input'
 
 export function Field({
   label,
@@ -101,8 +102,8 @@ export function BirthFields({
           </Select>
         </Field>
       )}
-      <Field label="วันเกิด (ค.ศ.)">
-        <TextInput type="date" value={value.birthDate} onChange={(e) => set({ birthDate: e.target.value })} />
+      <Field label="วัน/เดือน/ปี เกิด (ค.ศ.)" hint="ตัวอย่าง: 31/01/1990">
+        <DateInput value={value.birthDate} onChange={(birthDate) => set({ birthDate })} />
       </Field>
       <Field label="เวลาเกิด" hint="ยิ่งแม่นยิ่งดี — เสาเวลาเป็นหัวใจของความแม่น">
         <TextInput type="time" value={value.birthTime} onChange={(e) => set({ birthTime: e.target.value })} />

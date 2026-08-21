@@ -28,6 +28,10 @@ export function SiteHeader() {
               {n.label}
             </Link>
           ))}
+          {/* F-04 — "เข้าสู่ระบบ" ต้องอยู่ก่อนปุ่ม "เริ่มวิเคราะห์" ที่มุมขวาบน */}
+          <Link href="/login" className="text-sm font-medium text-ink transition-colors hover:text-gold">
+            เข้าสู่ระบบ
+          </Link>
           <Link href="/employer/new" className="btn-primary text-sm">
             เริ่มวิเคราะห์
           </Link>
@@ -55,6 +59,9 @@ export function SiteHeader() {
                 {n.label}
               </Link>
             ))}
+            <Link href="/login" onClick={() => setOpen(false)} className="py-2.5 text-sm font-medium text-ink">
+              เข้าสู่ระบบ
+            </Link>
             <Link href="/employer/new" onClick={() => setOpen(false)} className="btn-primary mt-2 text-sm">
               เริ่มวิเคราะห์
             </Link>

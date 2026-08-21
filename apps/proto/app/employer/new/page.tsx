@@ -5,6 +5,8 @@ import type { GenerateReportInput, OrgInput, TeamMemberInput } from '@minghe/rep
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { BirthFields, Field, Select, TextInput, emptyBirth, type BirthValue } from '@/components/forms'
+import { ConsentCheckbox } from '@/components/consent-checkbox'
+import { DateInput } from '@/components/date-input'
 import { ElementIcon } from '@/components/element-icon'
 import { Stepper, type StepDef } from '@/components/stepper'
 import { ELEMENT_META } from '@/lib/brand'
@@ -35,6 +37,7 @@ export default function EmployerWizard() {
   const [industryId, setIndustryId] = useState('')
   const [team, setTeam] = useState<BirthValue[]>([])
 
+  const [consented, setConsented] = useState(false)
   const [depth, setDepth] = useState<'standard' | 'premium' | 'executive'>('premium')
   const [speed, setSpeed] = useState<'standard' | 'express'>('standard')
   const [addons, setAddons] = useState<Record<AddonId, boolean>>({ 'executive-analysis': false, consult: false })
@@ -105,6 +108,7 @@ export default function EmployerWizard() {
   }
 
   function confirmPayment() {
+    if (!consented) return
     setGenerating(true)
     const order = {
       product: 'employer' as const,
@@ -154,8 +158,8 @@ export default function EmployerWizard() {
                 <Field label="ชื่อบริษัท">
                   <TextInput value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="เช่น บจก. มงคลเทรด" />
                 </Field>
-                <Field label="วันก่อตั้ง (ค.ศ.)" hint="ไม่ต้องระบุเวลา — ใช้ธาตุวันก่อตั้ง">
-                  <TextInput type="date" value={foundingDate} onChange={(e) => setFoundingDate(e.target.value)} />
+                <Field label="วัน/เดือน/ปี ก่อตั้ง (ค.ศ.)" hint="ตัวอย่าง: 31/01/1990 — ไม่ต้องระบุเวลา ใช้ธาตุวันก่อตั้ง">
+                  <DateInput value={foundingDate} onChange={setFoundingDate} />
                 </Field>
               </div>
             )}
@@ -316,13 +320,23 @@ export default function EmployerWizard() {
                 <div className="text-sm text-muted">เพื่อส่งให้ซินแสตรวจสอบและตีความ</div>
               </div>
             ) : (
-              <button onClick={confirmPayment} className="btn-primary mt-6 w-full py-4 text-base">
-                ยืนยันชำระ {thb(total)} บาท และเริ่มวิเคราะห์
-              </button>
+              <>
+                {/* F-06 — กล่องยินยอมต้องถูกติ๊กก่อนจึงจะชำระเงินได้ */}
+                <ConsentCheckbox checked={consented} onChange={setConsented} />
+                <button
+                  onClick={confirmPayment}
+                  disabled={!consented}
+                  className="btn-primary mt-4 w-full py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ยืนยันชำระ {thb(total)} บาท และเริ่มวิเคราะห์
+                </button>
+                {!consented && (
+                  <p className="mt-3 text-center text-xs text-muted">
+                    กรุณาติ๊กยอมรับเงื่อนไขก่อนดำเนินการชำระเงิน
+                  </p>
+                )}
+              </>
             )}
-            <p className="mt-3 text-center text-xs text-muted">
-              เมื่อกดยืนยัน ถือว่ายอมรับข้อตกลงการใช้งานและนโยบายความเป็นส่วนตัว (PDPA)
-            </p>
           </StepShell>
         )}
 

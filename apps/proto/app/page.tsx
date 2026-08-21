@@ -23,13 +23,17 @@ export default function LandingPage() {
               <br />
               เจอ “ที่ที่ใช่”
             </h1>
+            {/* F-13 — copy ตามสไลด์หน้า 5 */}
             <p className="mt-6 max-w-xl text-lg text-ink-soft text-balance">
               แพลตฟอร์มวิเคราะห์ <b className="text-ink">ความสมพงษ์ระหว่างคนกับองค์กร</b> ด้วยศาสตร์ปาจือ (八字)
-              แม่นยำระดับซินแสตัวจริง — ไม่ใช่แค่ดูดวง แต่คือการเตรียมวิธีทำงานร่วมกันให้ถูกจังหวะ
+            </p>
+            <p className="mt-3 max-w-xl text-ink-soft text-balance">
+              การบริหารชีวิตและบริหารทีม เพื่อขับเคลื่อนองค์กรสู่เป้าหมายด้วยองค์ความรู้นับพันปี
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
+              {/* F-12 — กล่องสีทองเปลี่ยนเป็น "ฉันเป็นองค์กร" ให้เข้าคู่กับ "ฉันเป็นคนหางาน" */}
               <Link href="/employer/new" className="btn-primary">
-                เริ่มวิเคราะห์ candidate
+                ฉันเป็นองค์กร
               </Link>
               <Link href="/jobseeker/new" className="btn-ghost">
                 ฉันเป็นคนหางาน →
@@ -112,11 +116,13 @@ export default function LandingPage() {
           </p>
         </div>
         <div className="mt-10 grid gap-6 md:grid-cols-2">
+          {/* F-15 — headline/desc ของการ์ดทั้งสองใบตามสไลด์หน้า 6 */}
           <ProductCard
             img="/img/employer.jpg"
             tag="สำหรับองค์กร"
             title="Employer"
-            desc="วิเคราะห์ความเข้ากันของ candidate กับผู้บริหาร ทีม และธาตุองค์กร พร้อม Team Roster และ Profile Memory"
+            headline="เช็กก่อนตัดสินใจ เคมีทีมจะเปลี่ยนอย่างไร เขาอยู่นานไหม เพราะเลือกคนที่ใช่ไปได้ไกลกว่า"
+            desc="วิเคราะห์ความสมพงษ์ ความส่งเสริมและสิ่งที่ต้องระวัง จากดวงของบริษัทเทียบกับดวงว่าที่ทีมงาน"
             points={['โควตา 6 candidate/สัปดาห์', 'วิเคราะห์รวมทั้งทีม (cross-data)', 'ซินแสตรวจทานแพ็กพรีเมียม']}
             price="699 บาท/เดือน"
             href="/employer"
@@ -127,7 +133,8 @@ export default function LandingPage() {
             img="/img/jobseeker.jpg"
             tag="สำหรับคนทำงาน"
             title="Job Seeker"
-            desc="เช็กก่อนตัดสินใจ — ดวงคุณสมพงษ์กับบริษัทที่กำลังสมัครไหม จากวันก่อตั้ง ธาตุอุตสาหกรรม และทิศที่ตั้ง"
+            headline="เช็กก่อนตัดสินใจ อยู่แล้วก้าวหน้าไหม จังหวะนี้มูฟได้หรือเปล่า"
+            desc="วิเคราะห์ความสมพงษ์ ความส่งเสริมและสิ่งที่ต้องระวัง จากดวงของคุณเทียบกับดวงบริษัท ด้วยวันก่อตั้ง ธาตุอุตสาหกรรม และทิศที่ตั้ง"
             points={['199 บาท / 1 บริษัท', 'หรือ 399/เดือน (3 บริษัท/สัปดาห์)', 'กรอกข้อมูลบริษัทเองได้ทันที']}
             price="เริ่ม 199 บาท"
             href="/jobseeker"
@@ -230,6 +237,7 @@ function ProductCard({
   img,
   tag,
   title,
+  headline,
   desc,
   points,
   price,
@@ -240,6 +248,7 @@ function ProductCard({
   img: string
   tag: string
   title: string
+  headline: string
   desc: string
   points: string[]
   price: string
@@ -275,7 +284,8 @@ function ProductCard({
         </div>
       </div>
       <div className="flex flex-1 flex-col p-7">
-        <p className="text-sm text-ink-soft">{desc}</p>
+        <p className="font-display-th text-lg leading-snug text-ink">{headline}</p>
+        <p className="mt-2 text-sm text-ink-soft">{desc}</p>
         <ul className="mt-4 space-y-2">
           {points.map((p) => (
             <li key={p} className="flex items-start gap-2 text-sm text-ink-soft">
