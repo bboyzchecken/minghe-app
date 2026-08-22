@@ -130,6 +130,10 @@ type payOrderBody struct {
 	ConsentID  uint   `json:"consent_id" validate:"required"`
 	PaymentRef string `json:"payment_ref"`
 	Method     string `json:"method"`
+	// true = ไม่ใช้สิทธิ์ทดลองแม้จะมี (ลูกค้าอยากเก็บสิทธิ์ไว้ใช้ครั้งอื่น)
+	SkipCredit bool `json:"skip_credit"`
+	// anon id ของ funnel — ใช้ปิดสถิติว่าคนนี้จ่ายแล้ว
+	AnonID string `json:"anon_id"`
 }
 
 // PayOrder ยืนยันการชำระเงิน
@@ -176,9 +180,55 @@ func (s *Server) PayOrder(c echo.Context) error {
 	order.Status = models.OrderPaid
 	order.PaidAt = &now
 
+	// สิทธิ์ทดลองที่แอดมินให้ไว้ — ถ้ามีที่ตรงกับสินค้า หักให้อัตโนมัติ ยอดเป็น 0
+	// (ลูกค้าที่ทักมาทางไลน์แล้วแอดมินกด "ให้สิทธิ์ลองใช้" จะเดินโฟลว์เดิมได้โดยไม่ต้องจ่าย)
+	userID := CurrentUserID(c)
+	amountSatang := order.AmountSatang
+	var usedCredit *models.UserCredit
+	if !body.SkipCredit {
+		if credits, listErr := s.BillingStore.ListCredits(&userID, models.CreditAvailable); listErr == nil {
+			for _, cr := range credits {
+				if cr.Usable(order.Product, now) && (cr.Depth == "" || cr.Depth == order.Depth) {
+					usedCredit = cr
+					break
+				}
+			}
+		}
+	}
+	if usedCredit != nil {
+		amountSatang = 0
+		order.AmountSatang = 0
+		order.PaymentMethod = models.PayMethodCredit
+		order.PaymentRef = "CREDIT-" + strconv.FormatUint(uint64(usedCredit.ID), 10)
+	}
+
 	if err := s.OrderStore.Update(order); err != nil {
 		return c.JSON(http.StatusInternalServerError, request.Err("cannot update order"))
 	}
+
+	if usedCredit != nil {
+		usedCredit.Status = models.CreditUsed
+		usedCredit.UsedOrderID = &order.ID
+		usedCredit.UsedAt = &now
+		if err := s.BillingStore.UpdateCredit(usedCredit); err != nil {
+			logger.Warn("cannot mark credit used: ", err)
+		}
+	}
+
+	// ออกใบเสร็จทุกครั้ง (รวมยอด 0 บาทจากสิทธิ์ทดลอง) — ลูกค้าดูย้อนหลังได้ใน Bill & Payment
+	if user, findErr := s.UserStore.Find(int(userID)); findErr == nil {
+		if _, err := s.issueReceipt(order, user, order.PaymentMethod, amountSatang, now); err != nil {
+			logger.Warn("cannot issue receipt for ", order.Code, ": ", err)
+		}
+	}
+
+	// ปิด funnel: ถือว่า anon นี้จ่ายแล้ว
+	if body.AnonID != "" {
+		_ = s.BillingStore.CreateEvent(&models.FunnelEvent{
+			AnonID: body.AnonID, UserID: &userID, Product: order.Product, Step: "paid", StepIndex: 99,
+		})
+	}
+
 	return c.JSON(http.StatusOK, toOrderResponse(order))
 }
 

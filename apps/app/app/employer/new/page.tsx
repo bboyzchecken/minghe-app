@@ -8,6 +8,7 @@ import { BirthFields, Field, Select, TextInput, emptyBirth, type BirthValue } fr
 import { ProfilePicker, SavedTeamPicker } from '@/components/memory-picker'
 import { placeFields, placeSummary } from '@/lib/place'
 import { ConsentCheckbox } from '@/components/consent-checkbox'
+import { CreditNotice, useApplicableCredit } from '@/components/credit-notice'
 import { DateInput, isoToDisplay } from '@/components/date-input'
 import { ElementIcon } from '@/components/element-icon'
 import { Stepper, type StepDef } from '@/components/stepper'
@@ -15,6 +16,7 @@ import { ELEMENT_META } from '@/lib/brand'
 import { ADDONS, DEPTH_TIERS, SPEED_OPTIONS, TEAM_FREE_SEATS, teamExtraCost, thb } from '@/lib/pricing'
 import { useCreateOrder } from '@/lib/queries'
 import { rememberReturnTo, useSession } from '@/lib/session'
+import { anonId, track } from '@/lib/track'
 import { clearWizardDraft, loadWizardDraft, saveCurrentOrder, saveWizardDraft } from '@/lib/store'
 
 const DRAFT_KEY = 'employer'
@@ -66,6 +68,7 @@ export default function EmployerWizard() {
   const [team, setTeam] = useState<BirthValue[]>([])
 
   const [consented, setConsented] = useState(false)
+  const [skipCredit, setSkipCredit] = useState(false)
   const [depth, setDepth] = useState<'standard' | 'premium' | 'executive'>('premium')
   const [speed, setSpeed] = useState<'standard' | 'express'>('standard')
   const [addons, setAddons] = useState<Record<AddonId, boolean>>({ 'executive-analysis': false, consult: false })
@@ -90,6 +93,17 @@ export default function EmployerWizard() {
 
   const depthTier = DEPTH_TIERS.find((d) => d.id === depth)!
   const teamExtra = teamExtraCost(team.length)
+  const credit = useApplicableCredit('employer', depth)
+  const payable = credit && !skipCredit ? 0 : null // null = คิดราคาเต็ม
+
+  // funnel — บอกแอดมินว่าคนที่ลองเล่นไปถึงขั้นไหน (ไม่เก็บข้อมูลที่กรอก)
+  const { token } = useSession()
+  useEffect(() => {
+    const names = ['step_subject', 'step_org', 'step_addons', 'step_review', 'checkout_view']
+    if (step === 0) track('employer', 'wizard_start', 0, token)
+    track('employer', names[step] ?? `step_${step}`, step + 1, token)
+    if (step === 4 && !sessionLoading && !user) track('employer', 'login_gate', 6, token)
+  }, [step, sessionLoading, user, token])
 
   const priceLines: PriceLine[] = useMemo(() => {
     const lines: PriceLine[] = [{ label: `รายงาน · ${depthTier.label}`, amount: depthTier.price }]
@@ -176,6 +190,8 @@ export default function EmployerWizard() {
         orgMode,
         // โปรไฟล์ผู้ถูกวิเคราะห์ถูกเก็บเป็นของ "องค์กร" ไม่ใช่ของคนกรอก (F-25)
         organizationId: user?.organizationId,
+        anonId: anonId(),
+        skipCredit,
       })
       saveCurrentOrder(order)
       router.push('/report')
@@ -421,6 +437,7 @@ export default function EmployerWizard() {
                 <div className="mt-4 rounded-lg border border-line bg-cloud px-4 py-3 text-sm text-ink-soft">
                   ชำระเงินในนาม <span className="font-medium text-ink">{user.name}</span> ({user.email})
                 </div>
+                <CreditNotice credit={credit} skip={skipCredit} onSkipChange={setSkipCredit} />
 
                 {/* F-06 — กล่องยินยอมต้องถูกติ๊กก่อนจึงจะชำระเงินได้ */}
                 <ConsentCheckbox checked={consented} onChange={setConsented} />
@@ -436,7 +453,7 @@ export default function EmployerWizard() {
                   disabled={!consented}
                   className="btn-primary mt-4 w-full py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  ยืนยันชำระ {thb(total)} บาท และเริ่มวิเคราะห์
+                  {payable === 0 ? 'ใช้สิทธิ์ทดลอง (0 บาท) และเริ่มวิเคราะห์' : `ยืนยันชำระ ${thb(total)} บาท และเริ่มวิเคราะห์`}
                 </button>
                 {!consented && (
                   <p className="mt-3 text-center text-xs text-muted">

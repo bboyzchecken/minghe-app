@@ -4,13 +4,31 @@
     {
       "name": "minghe-app",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@minghe/app", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@minghe/app",
+        "dev"
+      ],
       "port": 4311,
       "autoPort": true
     },
     {
       "name": "minghe-docker",
       "url": "http://localhost:8080"
+    },
+    {
+      "name": "minghe-app-4312",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@minghe/app",
+        "exec",
+        "next",
+        "dev",
+        "-p",
+        "4312"
+      ],
+      "port": 4312
     }
   ]
 }

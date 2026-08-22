@@ -89,18 +89,24 @@ export function buildNarrative(data: AssembledData): NarrativeSection[] {
     paragraphs: compatParagraphs,
   })
 
-  // 4) ทีม (ถ้ามี)
+  // 4) ทีม (ถ้ามี) — F-20: บอกให้ได้ว่า "เข้ากันเพราะอะไร" ไม่ใช่แค่คะแนนรายคน
   if (data.team && data.team.pairwise.length > 0) {
+    const team = data.team
     sections.push({
       id: 'team',
       title: 'ความเข้ากันกับทีม',
       paragraphs: [
-        data.team.summary,
-        ...data.team.pairwise.map(
-          (p) =>
-            `กับคุณ${p.name}: ${p.score}/100 (${p.gradeTh})` +
-            (p.topFactors[0] ? ` — ปัจจัยเด่น: ${p.topFactors[0].titleTh}` : ''),
-        ),
+        team.summary,
+        ...(team.pairSummary ? [team.pairSummary] : []),
+        // เอาเฉพาะชื่อปัจจัย ไม่ใส่คำอธิบายเต็ม — คำอธิบายอยู่ในการ์ดรายคู่บนหน้าเดียวกันแล้ว
+        // ถ้าใส่ซ้ำจะกลายเป็นอ่านเรื่องเดิมสองรอบในหน้าเดียว
+        ...team.pairwise.map((p) => {
+          const parts = [`กับคุณ${p.name}: ${p.score}/100 (${p.gradeTh})`]
+          if (p.strength) parts.push(`ส่งเสริม: ${p.strength.titleTh}`)
+          if (p.watchOut) parts.push(`ต้องบริหาร: ${p.watchOut.titleTh}`)
+          if (!p.strength && !p.watchOut) parts.push('ไม่พบปฏิสัมพันธ์ที่มีนัยสำคัญ')
+          return parts.join(' · ')
+        }),
       ],
     })
   }

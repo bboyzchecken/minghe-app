@@ -7,10 +7,11 @@
 
 | ส่วน | คืออะไร |
 |-----|---------|
-| **`apps/app`** | หน้าเว็บ minghe.work — Next.js 15 (static export) + **TanStack Query** · 2 ผลิตภัณฑ์ (Employer / Job Seeker) · สมัคร/ล็อกอินอีเมล + OTP · Admin Console |
+| **`apps/app`** | หน้าเว็บ minghe.work — Next.js 15 (static export) + **TanStack Query** · 2 ผลิตภัณฑ์ (Employer / Job Seeker) · สมัคร/ล็อกอินอีเมล + OTP + Google · คลังข้อมูล (โปรไฟล์ + team roster) · เอกสารกฎหมาย · Admin Console |
 | **`apps/api`** | Go REST API (Echo + GORM + Uber FX + **MySQL**) — **เจ้าของข้อมูลเจ้าเดียว**: บัญชี องค์กร โปรไฟล์ คำสั่งซื้อ ความยินยอม เอกสารกฎหมาย |
 | `packages/core` | เครื่องคำนวณปาจือ (pure TypeScript, browser-safe, มีเทสต์) |
 | `packages/report` | ประกอบรายงาน + เรียบเรียงไทย |
+| `tools/brand` | สคริปต์แยกโลโก้จาก `logo.png` + ทำ favicon + เจนภาพประกอบด้วย FLUX (ดู [README](tools/brand/README.md)) |
 | `deploy/lightsail` | compose + Caddy + setup script สำหรับ production API บน AWS Lightsail |
 | `.github/workflows` | CI (ทุก PR) · deploy หน้าบ้าน → Cloudflare Pages · deploy API → Lightsail (เฉพาะ `main`) |
 
@@ -18,6 +19,20 @@
 หน้าเว็บเรียกข้อมูลผ่าน hooks ใน [`apps/app/lib/queries.ts`](apps/app/lib/queries.ts) → interface เดียว [`apps/app/lib/api`](apps/app/lib/api/types.ts)
 ที่มี 2 implementation สลับได้ด้วย `MINGHE_MODE` — **`live`** (Go API, ของจริง) และ **`mock`** (ในเบราว์เซอร์ล้วน ไว้ให้ลูกค้าตรวจ user process)
 ไม่มี Prisma / API route ฝั่ง Next อีกต่อไป
+
+### สถานะงานตาม feedback UAT (22 ส.ค. 2026)
+
+รายละเอียดทั้งหมดอยู่ที่ [`docs/uat-2026-08-01-feedback-plan.md`](docs/uat-2026-08-01-feedback-plan.md) ·
+คำถามที่ยังต้องได้คำตอบจากคนอยู่ที่ [`docs/uat-2026-08-01-ask-ajarn-may.md`](docs/uat-2026-08-01-ask-ajarn-may.md)
+
+| | ข้อ |
+|---|---|
+| ✅ **เสร็จแล้ว (16)** | auth อีเมล+Google · trial→บังคับ login ก่อนจ่าย · consent gate · วันที่ DD/MM/YYYY · ลิงก์ Google Maps · โลโก้และภาพประกอบ · copy หน้าแรก · ระบบ memory · ความสัมพันธ์รายคู่กับทีม |
+| 🟨 **บางส่วน (2)** | F-01 เอกสารกฎหมาย (ร่างครบ 4 ฉบับ **รอตรวจ**) · F-05 บัญชีองค์กร (สมาชิกเสร็จ เหลือโควตา/PDPA) |
+| 🔑 **รอเนื้อหาจาก อ.เม (4)** | F-09 คำอธิบายประเภทธุรกิจ · F-18 section วิถี Data Science · F-23 ชั้นภาษา · F-24 ตารางจุดที่ควรบริหาร |
+| 🏗️ **รอ engine 大運 (3)** | F-21 momentum · F-22 dashboard คนทำงาน · F-26 foresight — ทั้งสามข้อรอตัวเดียวกัน |
+
+**ยังขายจริงไม่ได้จนกว่าจะ**: ตรวจเอกสารกฎหมาย → เชื่อม GB Prime Pay → ตั้งค่าผู้ให้บริการส่งอีเมล
 
 ---
 
@@ -122,8 +137,10 @@ minghe-app/
 ├── apps/api/                 # Go API · Dockerfile → alpine · seed_demo.go = ข้อมูลเดโม
 ├── packages/core/            # เครื่องคำนวณปาจือ
 ├── packages/report/          # ประกอบรายงาน + เรียบเรียงไทย
+├── tools/brand/              # แยกโลโก้จาก logo.png · favicon · เจนภาพด้วย FLUX
 ├── deploy/lightsail/         # production API: compose + Caddyfile + setup.sh
 ├── .github/workflows/        # ci.yml · deploy-web.yml · deploy-api.yml
 ├── .github/rulesets/         # main.json — ป้องกัน main
-└── docs/                     # แผน UAT · deploy.md
+├── docs/                     # แผน UAT · ชีทคำถามค้าง · deploy.md
+└── logo.png                  # แผ่น brand sheet ต้นฉบับจากลูกค้า (ที่มาของ public/brand/*)
 ```

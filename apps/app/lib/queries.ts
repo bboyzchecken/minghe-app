@@ -14,16 +14,21 @@ import {
   type AdminLegalDoc,
   type AdminOrder,
   type AdminOverview,
+  type AdminStats,
   type AdminUserRow,
   type CreateOrderDraft,
+  type GrantCreditInput,
   type InviteResult,
+  type MeProfile,
   type MockAccount,
   type OrderRecord,
+  type PaymentRecord,
   type OrgInvite,
   type OrgMember,
   type OrgRole,
   type OtpChallenge,
   type ProfileKind,
+  type RefundInput,
   type RegisterInput,
   type ResetPasswordInput,
   type ResolvedPlace,
@@ -32,6 +37,9 @@ import {
   type SavedProfile,
   type SavedTeam,
   type SavedTeamMember,
+  type StatsGranularity,
+  type UpdateMeInput,
+  type UserCredit,
 } from '@/lib/api'
 import { useSession } from '@/lib/session'
 
@@ -58,6 +66,15 @@ export const queryKeys = {
     orders: ['admin', 'orders'] as const,
     users: ['admin', 'users'] as const,
     legal: ['admin', 'legal'] as const,
+    stats: (g: StatsGranularity) => ['admin', 'stats', g] as const,
+    payments: (filter: string) => ['admin', 'payments', filter] as const,
+    credits: (userId?: string) => ['admin', 'credits', userId ?? 'all'] as const,
+  },
+  me: {
+    all: ['me'] as const,
+    profile: (userId: string) => ['me', userId, 'profile'] as const,
+    payments: (userId: string, scope: string) => ['me', userId, 'payments', scope] as const,
+    credits: (userId: string) => ['me', userId, 'credits'] as const,
   },
 }
 
@@ -140,6 +157,7 @@ export function useCreateOrder() {
       // ประวัติบน dashboard และคิวงานฝั่งแอดมินเปลี่ยนทันที
       void queryClient.invalidateQueries({ queryKey: ['orders', user?.id ?? 'anonymous'] })
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me.all })
     },
   })
 }
@@ -392,6 +410,120 @@ export function useAdminSetUserStatus() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.users })
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.overview })
     },
+  })
+}
+
+/* ── Admin: สถิติ / Bill & Payment / สิทธิ์ทดลอง ─────────── */
+
+export function useAdminStats(granularity: StatsGranularity) {
+  const { token, enabled } = useAdminEnabled()
+  return useQuery<AdminStats>({
+    queryKey: queryKeys.admin.stats(granularity),
+    queryFn: () => client.adminStats(token!, granularity),
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useAdminPayments(filter: { product?: string; status?: string; search?: string } = {}) {
+  const { token, enabled } = useAdminEnabled()
+  return useQuery<PaymentRecord[]>({
+    queryKey: queryKeys.admin.payments(JSON.stringify(filter)),
+    queryFn: () => client.adminListPayments(token!, filter),
+    enabled,
+  })
+}
+
+export function useAdminRefund() {
+  const { token } = useSession()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: RefundInput }) => {
+      if (!token) throw new Error('เซสชันหมดอายุ')
+      return client.adminRefundPayment(token, id, input)
+    },
+    // คืนเงินกระทบทั้งรายการชำระ คิวงาน และสถิติ
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.all }),
+  })
+}
+
+export function useAdminCredits(userId?: string) {
+  const { token, enabled } = useAdminEnabled()
+  return useQuery<UserCredit[]>({
+    queryKey: queryKeys.admin.credits(userId),
+    queryFn: () => client.adminListCredits(token!, userId),
+    enabled,
+  })
+}
+
+export function useAdminGrantCredit() {
+  const { token } = useSession()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, input }: { userId: string; input: GrantCreditInput }) => {
+      if (!token) throw new Error('เซสชันหมดอายุ')
+      return client.adminGrantCredit(token, userId, input)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.all }),
+  })
+}
+
+export function useAdminRevokeCredit() {
+  const { token } = useSession()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => {
+      if (!token) throw new Error('เซสชันหมดอายุ')
+      return client.adminRevokeCredit(token, id)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.all }),
+  })
+}
+
+/* ── ฝั่งผู้ใช้: โปรไฟล์ / Bill & Payment / สิทธิ์ทดลอง ────── */
+
+export function useMeProfile() {
+  const { token, user } = useSession()
+  return useQuery<MeProfile>({
+    queryKey: queryKeys.me.profile(user?.id ?? 'anonymous'),
+    queryFn: () => client.meProfile(token!),
+    enabled: Boolean(token && user),
+  })
+}
+
+export function useUpdateMe() {
+  const { token, user, adoptSession } = useSession()
+  const queryClient = useQueryClient()
+  return useMutation<MeProfile, Error, UpdateMeInput>({
+    mutationFn: (input) => {
+      if (!token) throw new Error('เซสชันหมดอายุ')
+      return client.updateMe(token, input)
+    },
+    onSuccess: (profile) => {
+      // ชื่อบน header เปลี่ยนทันที — ใช้ token เดิม
+      if (token && user) adoptSession({ token, user: { ...user, name: profile.name } })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me.all })
+    },
+  })
+}
+
+/** ใบเสร็จของฉัน — ฝั่งองค์กรเห็นของทั้งองค์กร */
+export function useMyPayments() {
+  const { token, user } = useSession()
+  const scope = user?.organizationId ?? 'self'
+  return useQuery<PaymentRecord[]>({
+    queryKey: queryKeys.me.payments(user?.id ?? 'anonymous', scope),
+    queryFn: () => client.listMyPayments(token!, user?.organizationId),
+    enabled: Boolean(token && user),
+  })
+}
+
+export function useMyCredits() {
+  const { token, user } = useSession()
+  return useQuery<UserCredit[]>({
+    queryKey: queryKeys.me.credits(user?.id ?? 'anonymous'),
+    queryFn: () => client.listMyCredits(token!),
+    enabled: Boolean(token && user),
   })
 }
 

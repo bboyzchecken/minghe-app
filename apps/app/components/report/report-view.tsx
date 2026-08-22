@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReportData } from '@minghe/report/types'
+import type { PairHighlight, ReportData, TeamPairView } from '@minghe/report/types'
 import { ELEMENT_META, ELEMENT_ORDER, type ElementKey } from '@/lib/brand'
 import { ElementIcon } from '@/components/element-icon'
 import { starsFromChart, tenGodsPercent } from '@/lib/report'
@@ -30,7 +30,7 @@ export function ReportView({
   const stars = starsFromChart(chart)
 
   return (
-    <article className="mx-auto max-w-3xl">
+    <article className="report-doc mx-auto max-w-3xl">
       {/* ---- header ---- */}
       <header className="rounded-xl border border-line bg-card p-7 shadow-card md:p-9">
         <div className="flex items-start justify-between">
@@ -154,7 +154,7 @@ export function ReportView({
       </Section>
 
       {/* ---- ten gods % ---- */}
-      <Section title="สิบเทพเชิงสัดส่วน" cn="十神" hint="โครงสร้างพลังงานเชิงการทำงานที่เด่นในดวง">
+      <Section flow title="สิบเทพเชิงสัดส่วน" cn="十神" hint="โครงสร้างพลังงานเชิงการทำงานที่เด่นในดวง">
         <div className="space-y-3">
           {tenGods.map((g) => (
             <div key={g.cn} className="rounded-lg border border-line bg-cloud p-4">
@@ -175,7 +175,7 @@ export function ReportView({
       </Section>
 
       {/* ---- stars ---- */}
-      <Section title="ดาวจุติ" cn="神煞" hint="ดาวเสริมที่สะท้อนพรสวรรค์เฉพาะด้าน">
+      <Section flow title="ดาวจุติ" cn="神煞" hint="ดาวเสริมที่สะท้อนพรสวรรค์เฉพาะด้าน">
         <div className="grid gap-3 sm:grid-cols-3">
           {stars.map((s) => (
             <div
@@ -203,24 +203,31 @@ export function ReportView({
         </div>
       </Section>
 
-      {/* ---- team ---- */}
+      {/* ---- team ---- F-20: รายคู่ต้องบอกได้ว่า "what's in it" ไม่ใช่แค่คะแนน ---- */}
       {data.team && data.team.pairwise.length > 0 && (
-        <Section title="ความเข้ากันกับทีม" cn="团队">
-          <div className="mb-3 flex items-center justify-between rounded-lg bg-paper-warm/50 p-4">
-            <span className="text-sm text-ink-soft">{data.team.summary}</span>
-            <span className="font-display-en text-2xl font-semibold text-ink">{data.team.overallScore}</span>
+        <Section flow title="ความเข้ากันกับทีม รายคน" cn="团队">
+          <div className="mb-4 rounded-lg bg-paper-warm/50 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <span className="text-sm text-ink-soft">{data.team.summary}</span>
+              <span className="font-display-en text-2xl font-semibold leading-none text-ink">
+                {data.team.overallScore}
+              </span>
+            </div>
+            {data.team.pairSummary && (
+              <p className="mt-2 border-t border-line/60 pt-2 text-sm text-ink">{data.team.pairSummary}</p>
+            )}
           </div>
-          <div className="space-y-2">
-            {data.team.pairwise.map((p) => (
-              <div key={p.name} className="flex items-center gap-3 rounded-lg border border-line bg-cloud p-3">
-                <span className="w-24 truncate text-sm text-ink">คุณ{p.name}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-paper-warm">
-                  <div className="h-full rounded-full bg-jade" style={{ width: `${p.score}%` }} />
-                </div>
-                <span className="w-16 text-right text-xs text-muted">{p.score} · {p.gradeTh}</span>
-              </div>
+
+          <div className="space-y-3">
+            {data.team.pairwise.map((p, i) => (
+              <PairCard key={`${p.name}-${i}`} pair={p} rank={i + 1} />
             ))}
           </div>
+
+          <p className="mt-4 text-xs text-muted">
+            เรียงจากเข้ากันได้ดีที่สุดไปหาคู่ที่ต้องบริหารความต่างมากที่สุด ·
+            คะแนนเป็นดัชนีสมพงษ์ (合 Index) เต็ม 100
+          </p>
         </Section>
       )}
 
@@ -236,7 +243,7 @@ export function ReportView({
       </Section>
 
       {/* ---- narrative ---- */}
-      <Section title="บทวิเคราะห์" cn="解读">
+      <Section flow title="บทวิเคราะห์" cn="解读">
         <div className="space-y-6">
           {data.narrative.sections.map((s) => (
             <div key={s.id} className="print-avoid-break">
@@ -272,15 +279,22 @@ function Section({
   title,
   cn,
   hint,
+  flow,
   children,
 }: {
   title: string
   cn?: string
   hint?: string
+  /** ส่วนที่เนื้อหายาวเกินหนึ่งหน้ากระดาษ — ยอมให้ไหลข้ามหน้าแทนที่จะดันทั้งบล็อกไปหน้าใหม่ */
+  flow?: boolean
   children: React.ReactNode
 }) {
   return (
-    <section className="mt-6 rounded-xl border border-line bg-card p-6 shadow-soft md:p-8 print-avoid-break">
+    <section
+      className={`report-section mt-6 rounded-xl border border-line bg-card p-6 shadow-soft md:p-8 ${
+        flow ? 'report-section-flow' : ''
+      }`}
+    >
       <div className="mb-5 flex items-baseline justify-between">
         <h3 className="flex items-baseline gap-2 text-xl text-ink">
           {title}
@@ -342,6 +356,73 @@ function PillarCard({ pillar }: { pillar: ReportData['subject']['chart']['pillar
           {pillar.hiddenStems.map((h) => h.cn).join(' ')}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * ความสัมพันธ์รายคู่ระหว่างผู้ถูกวิเคราะห์กับสมาชิกทีมหนึ่งคน (F-20)
+ *
+ * โครงตามที่ตัดสินไว้: คะแนน + ป้ายความสัมพันธ์ + คำบรรยายสั้น
+ * ป้ายมาจากปัจจัยที่มีน้ำหนักสูงสุดของแต่ละฝั่ง ซึ่งเขียนเป็นไทยพร้อมวงเล็บศัพท์เดิมอยู่แล้ว
+ */
+function PairCard({ pair, rank }: { pair: TeamPairView; rank: number }) {
+  const color = GRADE_COLOR[pair.grade] ?? '#BE8A2E'
+  return (
+    <div className="rounded-lg border border-line bg-cloud p-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-paper-warm text-[11px] text-muted">
+          {rank}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">คุณ{pair.name}</span>
+        <span className="font-display-en text-lg font-semibold leading-none" style={{ color }}>
+          {pair.score}
+        </span>
+        <span className="text-xs" style={{ color }}>
+          {pair.gradeTh}
+        </span>
+      </div>
+
+      <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-paper-warm">
+        <div className="h-full rounded-full" style={{ width: `${pair.score}%`, background: color }} />
+      </div>
+
+      {(pair.strength || pair.watchOut) && (
+        <div className="mt-3 space-y-2">
+          {pair.strength && (
+            <PairNote tone="jade" label="ส่งเสริม" highlight={pair.strength} />
+          )}
+          {pair.watchOut && (
+            <PairNote tone="terracotta" label="ต้องบริหาร" highlight={pair.watchOut} />
+          )}
+        </div>
+      )}
+
+      {!pair.strength && !pair.watchOut && (
+        <p className="mt-3 text-xs leading-6 text-muted">
+          ไม่พบปฏิสัมพันธ์ที่มีนัยสำคัญระหว่างสองดวงนี้ — ทำงานร่วมกันแบบไม่ส่งเสริมและไม่ขัดกันเป็นพิเศษ
+        </p>
+      )}
+    </div>
+  )
+}
+
+function PairNote({
+  tone,
+  label,
+  highlight,
+}: {
+  tone: 'jade' | 'terracotta'
+  label: string
+  highlight: PairHighlight
+}) {
+  const cls = tone === 'jade' ? 'text-jade' : 'text-terracotta'
+  return (
+    <div className="flex items-start gap-2 text-xs leading-6">
+      <span className={`mt-px flex-none font-medium ${cls}`}>{tone === 'jade' ? '✓' : '⚠'} {label}</span>
+      <span className="text-ink-soft">
+        <b className="font-medium text-ink">{highlight.titleTh}</b> — {highlight.explanation}
+      </span>
     </div>
   )
 }

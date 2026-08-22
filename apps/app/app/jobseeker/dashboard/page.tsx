@@ -1,187 +1,126 @@
 'use client'
 
+/**
+ * Job Seeker · ภาพรวม — บริษัทที่เคยเช็ก + สิ่งที่ควรรู้ ในจอเดียว (มือถือเป็นหลัก)
+ */
+
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ElementIcon } from '@/components/element-icon'
-import { RequireLogin } from '@/components/require-login'
-import { RoleBadge } from '@/components/role-badge'
-import { RoleCapabilities } from '@/components/role-capabilities'
-import type { OrderRecord } from '@/lib/api'
 import { isoToDisplay } from '@/components/date-input'
-import { useDeleteProfile, useOrders, useSavedProfiles } from '@/lib/queries'
-import { thb } from '@/lib/pricing'
+import { Icon } from '@/components/workspace/icons'
+import { WorkspaceShell, jobseekerNav } from '@/components/workspace/shell'
+import { Badge, EmptyState, PageHeader, Panel, Skeleton, StatTile, baht, fmtDate } from '@/components/workspace/ui'
+import type { OrderRecord } from '@/lib/api'
+import { JOBSEEKER_WEEKLY_QUOTA } from '@/lib/pricing'
+import { useMyCredits, useMyPayments, useOrders, useSavedProfiles } from '@/lib/queries'
 import { useSession } from '@/lib/session'
 import { saveCurrentOrder } from '@/lib/store'
 
 export default function JobSeekerDashboardPage() {
   return (
-    <RequireLogin path="/jobseeker/dashboard">
+    <WorkspaceShell nav={jobseekerNav} brand="บัญชีคนทำงาน" requirePath="/jobseeker/dashboard">
       <JobSeekerDashboard />
-    </RequireLogin>
+    </WorkspaceShell>
   )
 }
 
 function JobSeekerDashboard() {
   const router = useRouter()
   const { user } = useSession()
-  const { data: orders, isPending, error } = useOrders('jobseeker')
+  const orders = useOrders('jobseeker')
+  const payments = useMyPayments()
+  const credits = useMyCredits()
+  const profiles = useSavedProfiles('self')
 
-  function openReport(order: OrderRecord) {
+  const rows = orders.data ?? []
+  const weekAgo = Date.now() - 7 * 86_400_000
+  const thisWeek = rows.filter((o) => new Date(o.createdAt).getTime() > weekAgo).length
+  const spent = (payments.data ?? []).reduce((s, p) => s + p.amount - p.refundAmount, 0)
+  const available = (credits.data ?? []).filter((c) => c.status === 'available').length
+  const me = profiles.data?.[0]
+
+  function open(order: OrderRecord) {
     saveCurrentOrder(order)
     router.push('/report')
   }
 
-  const rows = orders ?? []
-
   return (
-    <div className="container-page py-10 md:py-14">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <span className="eyebrow">Job Seeker · Dashboard</span>
-          <h1 className="mt-2 text-3xl">บริษัทที่คุณเช็ก</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-soft">
-            เข้าใช้โดย {user?.name}
-            {user && <RoleBadge user={user} />}
-          </p>
-        </div>
-        <Link href="/jobseeker/new" className="btn-primary">
-          + เช็กบริษัทใหม่
-        </Link>
-      </div>
+    <>
+      <PageHeader
+        eyebrow="บัญชีส่วนบุคคล"
+        title={`สวัสดี ${user?.name?.split(' ')[0] ?? ''}`}
+        description="บริษัทไหนส่งเสริมดวงคุณ — เช็กก่อนสมัครหรือตอบรับงาน"
+        actions={
+          <Link href="/jobseeker/new" className="ws-btn-primary">
+            <Icon name="plus" size={15} /> เช็กบริษัทใหม่
+          </Link>
+        }
+      />
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        <Stat el="water" label="โควตาสัปดาห์นี้" value={`${Math.min(rows.length, 3)} / 3`} sub="รีเซ็ตทุกวันจันทร์" />
-        <Stat el="metal" label="แพ็กเกจ" value="Pay-per-view" sub="199 บาท/ครั้ง · รายเดือน 399" />
-        <Stat el="wood" label="เช็กทั้งหมด" value={isPending ? '—' : String(rows.length)} sub="ตลอดการใช้งาน" />
-      </div>
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
-          <h2 className="text-xl">ประวัติการเช็ก</h2>
-
-          {error && (
-            <p className="mt-4 rounded-lg border border-terracotta/40 bg-terracotta/[0.07] px-4 py-2.5 text-sm text-terracotta">
-              {error.message}
-            </p>
-          )}
-
-          {isPending ? (
-            <div className="mt-4 space-y-3" aria-hidden="true">
-              {[0, 1].map((i) => (
-                <div key={i} className="h-20 animate-pulse rounded-lg bg-paper-warm" />
-              ))}
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="mt-6 rounded-lg border border-dashed border-line bg-paper-warm/40 p-8 text-center">
-              <p className="text-sm text-ink-soft">ยังไม่มีประวัติ — ลองเช็กบริษัทแรกของคุณ</p>
-              <Link href="/jobseeker/new" className="btn-ghost mt-4 !py-2 text-sm">
-                เช็กบริษัท
-              </Link>
-            </div>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {rows.map((order) => (
-                <div
-                  key={order.code}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-cloud p-4"
-                >
-                  <div>
-                    <div className="font-medium text-ink">{order.orgLabel}</div>
-                    <div className="text-xs text-muted">
-                      รหัส {order.code} · ยอดชำระ {thb(order.total)} ฿ ·{' '}
-                      {new Date(order.createdAt).toLocaleDateString('th-TH', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-jade">
-                      {order.status === 'ready' ? 'พร้อมแล้ว' : 'รอชำระเงิน'}
-                    </span>
-                    <button
-                      onClick={() => openReport(order)}
-                      disabled={order.status !== 'ready'}
-                      className="btn-ghost !px-4 !py-2 text-xs disabled:opacity-50"
-                    >
-                      ดูรายงาน
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="space-y-6">
-          {/* F-25 — ข้อมูลของตัวเองที่ระบบจำไว้ ไม่ต้องกรอกวันเกิดใหม่ทุกครั้งที่เช็กบริษัท */}
-          <MyProfileCard />
-          {user && <RoleCapabilities user={user} />}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function MyProfileCard() {
-  const { data: profiles = [], isPending } = useSavedProfiles('self')
-  const deleteProfile = useDeleteProfile()
-
-  return (
-    <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
-      <h2 className="text-lg">ข้อมูลที่ระบบจำไว้</h2>
-      <p className="mt-2 text-sm text-ink-soft">
-        วัน-เวลา-สถานที่เกิดของคุณถูกบันทึกไว้ตอนเช็กครั้งแรก — ครั้งต่อไปเลือกใช้ซ้ำได้เลย
-      </p>
-
-      {isPending ? (
-        <div className="mt-3 h-14 animate-pulse rounded-lg bg-paper-warm" aria-hidden="true" />
-      ) : profiles.length === 0 ? (
-        <p className="mt-3 rounded-lg border border-dashed border-line bg-paper-warm/40 p-4 text-xs text-muted">
-          ยังไม่มี — เช็กบริษัทแรกแล้วระบบจะจำข้อมูลของคุณไว้ให้เอง
-        </p>
-      ) : (
-        <div className="mt-3 space-y-2">
-          {profiles.map((profile) => (
-            <div
-              key={profile.id}
-              className="flex items-center justify-between gap-3 rounded-lg bg-paper-warm/50 px-3 py-2"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-sm text-ink">{profile.name}</div>
-                <div className="text-[11px] text-muted">
-                  เกิด {isoToDisplay(profile.birthDate)}
-                  {profile.birthTime ? ` ${profile.birthTime}` : ''}
-                  {profile.placeLabel || profile.province ? ` · ${profile.placeLabel || profile.province}` : ''}
-                </div>
-              </div>
-              <button
-                onClick={() => void deleteProfile.mutateAsync(profile.id).catch(() => undefined)}
-                className="flex-none text-[11px] text-muted hover:text-terracotta hover:underline"
-              >
-                ลบ
-              </button>
-            </div>
-          ))}
+      {available > 0 && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ws-success/40 bg-ws-success-soft/50 px-4 py-3">
+          <div className="flex items-center gap-3 text-sm">
+            <Icon name="gift" size={18} className="text-ws-success" />
+            <span className="text-ws-ink">คุณมีสิทธิ์เช็กฟรี <b>{available}</b> ครั้ง — หักให้อัตโนมัติตอนชำระเงิน</span>
+          </div>
+          <Link href="/jobseeker/new" className="ws-btn-primary ws-btn-sm">ใช้สิทธิ์</Link>
         </div>
       )}
 
-      <p className="mt-3 text-[11px] text-muted">
-        ลบได้ตลอดเวลา — ข้อมูลนี้เป็นของคุณ (PDPA)
-      </p>
-    </div>
-  )
-}
-
-function Stat({ el, label, value, sub }: { el: 'metal' | 'water' | 'wood'; label: string; value: string; sub: string }) {
-  return (
-    <div className="rounded-xl border border-line bg-card p-5 shadow-soft">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted">{label}</span>
-        <ElementIcon element={el} size={18} />
+      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatTile label="เช็กสัปดาห์นี้" value={`${thisWeek} / ${JOBSEEKER_WEEKLY_QUOTA}`} icon="chart" tone="success" hint="โควตาแพ็กรายเดือน" />
+        <StatTile label="เช็กทั้งหมด" value={orders.isPending ? '—' : rows.length} icon="file" hint="ตลอดการใช้งาน" />
+        <StatTile label="ใช้จ่ายรวม" value={baht(spent)} icon="wallet" hint={<Link href="/jobseeker/billing" className="text-ws-accent hover:underline">ดูใบเสร็จ</Link>} />
+        <StatTile label="แพ็กเกจ" value={<span className="text-lg">รายครั้ง</span>} icon="shield" hint="199 บาท/ครั้ง · รายเดือน 399" />
       </div>
-      <div className="mt-2 text-2xl font-semibold text-ink">{value}</div>
-      <div className="text-xs text-muted">{sub}</div>
-    </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
+        <Panel title="บริษัทที่คุณเช็ก" padded={false}>
+          {orders.error && <p className="m-4 rounded-lg bg-ws-danger-soft px-3 py-2 text-sm text-ws-danger">{orders.error.message}</p>}
+          {orders.isPending ? (
+            <div className="p-5"><Skeleton rows={2} height="h-16" /></div>
+          ) : rows.length === 0 ? (
+            <div className="p-5">
+              <EmptyState icon="file" title="ยังไม่มีประวัติ" hint="ลองเช็กบริษัทแรกของคุณ" action={<Link href="/jobseeker/new" className="ws-btn-primary ws-btn-sm">เช็กบริษัท</Link>} />
+            </div>
+          ) : (
+            <ul className="divide-y divide-ws-border">
+              {rows.map((o) => (
+                <li key={o.code} className="flex items-center justify-between gap-3 px-4 py-3 md:px-5">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-ws-ink">{o.orgLabel}</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ws-muted">
+                      <span className="ws-mono">{o.code}</span>
+                      <span>{fmtDate(o.createdAt)}</span>
+                      <span className="ws-mono">{baht(o.total)}</span>
+                      {o.status === 'ready' ? <Badge tone="success" dot>{o.paymentMethod === 'credit' ? 'สิทธิ์ทดลอง' : 'พร้อมแล้ว'}</Badge> : <Badge tone="warn" dot>รอชำระ</Badge>}
+                    </div>
+                  </div>
+                  <button onClick={() => open(o)} disabled={o.status !== 'ready'} className="ws-btn-soft ws-btn-sm flex-none">
+                    ดูรายงาน
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel title="ข้อมูลดวงที่ระบบจำไว้" description="ครั้งต่อไปไม่ต้องกรอกวันเกิดใหม่" action={<Link href="/jobseeker/profile" className="ws-btn-ghost ws-btn-sm">จัดการ</Link>}>
+          {profiles.isPending ? (
+            <Skeleton rows={1} height="h-12" />
+          ) : !me ? (
+            <p className="text-sm text-ws-muted">ยังไม่มี — เช็กบริษัทแรกแล้วระบบจะจำให้อัตโนมัติ</p>
+          ) : (
+            <div className="rounded-lg bg-ws-raised px-3 py-2.5">
+              <div className="text-sm font-medium text-ws-ink">{me.name}</div>
+              <div className="text-xs text-ws-muted">
+                เกิด {isoToDisplay(me.birthDate)}{me.birthTime ? ` ${me.birthTime}` : ''}{me.placeLabel || me.province ? ` · ${me.placeLabel || me.province}` : ''}
+              </div>
+            </div>
+          )}
+          <p className="mt-3 text-[11px] text-ws-faint">ข้อมูลส่วนบุคคลของคุณแยกขาดจากฝั่งองค์กร · ลบได้ตลอดเวลา (PDPA)</p>
+        </Panel>
+      </div>
+    </>
   )
 }

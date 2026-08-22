@@ -17,7 +17,16 @@ import {
   type AdminLegalDoc,
   type AdminOrder,
   type AdminOverview,
+  type AdminStats,
   type AdminUserRow,
+  type DropoffUser,
+  type FunnelStep,
+  type MeProfile,
+  type PaymentRecord,
+  type StatsBucket,
+  type StatsGranularity,
+  type TrackEventInput,
+  type UserCredit,
   type AuthResult,
   type CreateOrderDraft,
   type InviteResult,
@@ -48,6 +57,10 @@ const TEAMS_KEY = 'minghe:mock:teams'
 const TEAM_MEMBERS_KEY = 'minghe:mock:teamMembers'
 const ACCOUNTS_KEY = 'minghe:mock:accounts'
 const PASSWORDS_KEY = 'minghe:mock:passwords'
+const PROFILE_META_KEY = 'minghe:mock:profileMeta'
+const REFUNDS_KEY = 'minghe:mock:refunds'
+const CREDITS_KEY = 'minghe:mock:credits'
+const EVENTS_KEY = 'minghe:mock:events'
 const OTP_PREFIX = 'minghe:mock:otp:'
 const TOKEN_PREFIX = 'mock-token:'
 
@@ -390,6 +403,278 @@ function mockUsers(): AdminUserRow[] {
     { id: 'wirat@company.co.th', email: 'wirat@company.co.th', name: 'วิรัตน์ พาณิชย์', role: 'user', status: 'deactivated' },
   ]
   return base.map((u) => ({ ...u, status: overrides[u.email] ?? u.status }))
+}
+
+/* ── Bill & Payment / สิทธิ์ทดลอง / สถิติ (จำลอง) ─────────── */
+
+interface RefundNote {
+  amount: number
+  reason: string
+  by: string
+  at: string
+}
+
+interface StoredCredit extends Omit<UserCredit, 'userEmail' | 'userName'> {}
+
+interface StoredEvent {
+  anonId: string
+  userEmail: string | null
+  product: 'employer' | 'jobseeker'
+  step: string
+  stepIndex: number
+  at: string
+}
+
+function readRefunds(): Record<string, RefundNote> {
+  return readJSON<Record<string, RefundNote>>(REFUNDS_KEY, {})
+}
+
+function readCredits(): StoredCredit[] {
+  return readJSON<StoredCredit[]>(CREDITS_KEY, [])
+}
+
+function readEvents(): StoredEvent[] {
+  return readJSON<StoredEvent[]>(EVENTS_KEY, [])
+}
+
+/** เลขใบเสร็จจำลอง — คงที่ต่อรหัสคำสั่งซื้อ (ออกใหม่ทุกครั้งไม่ได้ ใบเสร็จต้องนิ่ง) */
+function receiptNoFor(order: OrderRecord): string {
+  const ym = order.createdAt.slice(0, 7).replace('-', '')
+  let h = 0
+  for (const ch of order.code) h = (h * 31 + ch.charCodeAt(0)) % 9000
+  return `RCP-${ym}-${String(1000 + h).padStart(4, '0')}`
+}
+
+function describeOrder(o: OrderRecord): string {
+  const base = o.product === 'jobseeker' ? 'เช็กความสมพงษ์กับบริษัท' : 'รายงานความสมพงษ์'
+  return `${base}${o.express ? ' + Express' : ''} (${o.code})`
+}
+
+/** ทุกคำสั่งซื้อ = หนึ่งใบเสร็จ (รวมยอด 0 จากสิทธิ์ทดลอง) */
+function paymentsOf(email: string, orders: OrderRecord[]): PaymentRecord[] {
+  const account = findAccount(email)
+  const refunds = readRefunds()
+  const queue = readQueue()
+  return orders.map((o) => {
+    const refund = refunds[o.code]
+    const status: PaymentRecord['status'] = !refund
+      ? 'paid'
+      : refund.amount >= o.total
+        ? 'refunded'
+        : 'partially_refunded'
+    const q = queue.find((r) => r.code === o.code)
+    return {
+      id: o.code,
+      receiptNo: receiptNoFor(o),
+      orderId: o.code,
+      orderCode: o.code,
+      orderStatus: refund && status === 'refunded' ? 'refunded' : (q?.status ?? 'delivered'),
+      product: o.product,
+      description: describeOrder(o),
+      customerName: account?.name ?? email,
+      customerEmail: email,
+      amount: o.total,
+      refundAmount: refund?.amount ?? 0,
+      currency: 'THB',
+      method: o.paymentMethod ?? (o.total === 0 ? 'credit' : 'pending_gateway'),
+      providerRef: o.paymentMethod === 'credit' ? 'CREDIT' : `PRE-${o.code}`,
+      status,
+      refundReason: refund?.reason ?? '',
+      refundedBy: refund?.by ?? '',
+      refundedAt: refund?.at ?? null,
+      paidAt: o.createdAt,
+    }
+  })
+}
+
+/** ลูกค้าทุกราย (บัญชีทดลอง + สมัครเอง) → รวมใบเสร็จทั้งหมดให้แอดมิน */
+function allPayments(): PaymentRecord[] {
+  const emails = new Set<string>([...MOCK_ACCOUNTS.map((a) => a.email), ...registeredAccounts().map((a) => a.email)])
+  const out: PaymentRecord[] = []
+  for (const email of emails) {
+    const account = findAccount(email)
+    if (!account || account.side === 'admin') continue
+    out.push(...paymentsOf(email, ordersFor(email)))
+  }
+  // คิวงานจำลองมีคำสั่งซื้อที่ไม่ได้อยู่ใน order book ของใคร — ออกใบเสร็จให้ด้วย
+  const seen = new Set(out.map((p) => p.orderCode))
+  for (const row of readQueue()) {
+    if (seen.has(row.code)) continue
+    const pseudo: OrderRecord = {
+      id: row.code,
+      code: row.code,
+      product: row.product,
+      status: 'ready',
+      subjectName: row.subjectName,
+      orgLabel: row.orgLabel,
+      total: row.total,
+      express: row.express,
+      createdAt: row.createdAt,
+      input: { subject: { name: row.subjectName, birthDate: '1990-01-01', birthTime: '00:00' }, org: { mode: 'industry', industryId: 'logistics' }, targetYear: 2026 },
+    }
+    const [p] = paymentsOf(row.customerEmail, [pseudo])
+    out.push({ ...p, customerName: row.customerEmail.split('@')[0] })
+  }
+  return out.sort((a, b) => b.paidAt.localeCompare(a.paidAt))
+}
+
+function usableCredit(email: string, product: 'employer' | 'jobseeker'): StoredCredit | null {
+  const now = Date.now()
+  return (
+    readCredits().find(
+      (c) =>
+        c.userId === email &&
+        c.status === 'available' &&
+        (c.product === 'any' || c.product === product) &&
+        (!c.expiresAt || new Date(c.expiresAt).getTime() > now),
+    ) ?? null
+  )
+}
+
+/* ── สถิติย้อนหลังจำลอง ──
+ * ของจริงมาจาก payments/orders/users/events ใน MySQL · โหมด mock มีข้อมูลแค่ไม่กี่แถว
+ * จึงสังเคราะห์ประวัติย้อนหลังแบบ "สุ่มคงที่" (seed จาก key) ให้กราฟมีรูปร่างพอให้ทดสอบ UI
+ * แล้วบวกตัวเลขจริงของเดือน/วันปัจจุบันทับเข้าไป
+ */
+function seeded(key: string, salt: number): number {
+  let h = salt
+  for (const ch of key) h = (h * 33 + ch.charCodeAt(0)) >>> 0
+  return ((h % 1000) / 1000)
+}
+
+function bucketKey(date: Date, g: StatsGranularity): string {
+  const iso = date.toISOString()
+  return g === 'year' ? iso.slice(0, 4) : g === 'month' ? iso.slice(0, 7) : iso.slice(0, 10)
+}
+
+function bucketKeys(g: StatsGranularity): string[] {
+  const now = new Date()
+  const keys: string[] = []
+  if (g === 'day') {
+    for (let i = 29; i >= 0; i--) keys.push(bucketKey(new Date(now.getTime() - i * 86_400_000), g))
+  } else if (g === 'month') {
+    for (let i = 11; i >= 0; i--) keys.push(bucketKey(new Date(now.getFullYear(), now.getMonth() - i, 15), g))
+  } else {
+    for (let i = 4; i >= 0; i--) keys.push(String(now.getFullYear() - i))
+  }
+  return keys
+}
+
+function synthBucket(key: string, g: StatsGranularity): StatsBucket {
+  const scale = g === 'day' ? 1 : g === 'month' ? 26 : 300
+  const r = (n: number) => seeded(key, n)
+  const empOrders = Math.round(r(1) * 4 * scale)
+  const jsOrders = Math.round(r(2) * 6 * scale)
+  return {
+    key,
+    revenueEmployer: empOrders * 299 + Math.round(r(3) * 200 * scale),
+    revenueJobseeker: jsOrders * 199,
+    refunds: r(4) > 0.85 ? 199 * Math.max(1, Math.round(scale / 10)) : 0,
+    payments: empOrders + jsOrders,
+    ordersEmployer: empOrders,
+    ordersJobseeker: jsOrders,
+    signups: Math.round(r(5) * 5 * scale),
+    trialsStarted: Math.round((empOrders + jsOrders) * (2.2 + r(6))),
+    trialsPaid: empOrders + jsOrders,
+  }
+}
+
+function realBucketsInto(series: StatsBucket[], g: StatsGranularity) {
+  const byKey = new Map(series.map((b) => [b.key, b]))
+  for (const p of allPayments()) {
+    const b = byKey.get(bucketKey(new Date(p.paidAt), g))
+    if (!b) continue
+    const net = p.amount - p.refundAmount
+    if (p.product === 'jobseeker') b.revenueJobseeker += net
+    else b.revenueEmployer += net
+    b.refunds += p.refundAmount
+    b.payments += 1
+    if (p.product === 'jobseeker') b.ordersJobseeker += 1
+    else b.ordersEmployer += 1
+  }
+  const started = new Map<string, Set<string>>()
+  const paid = new Map<string, Set<string>>()
+  for (const e of readEvents()) {
+    const k = bucketKey(new Date(e.at), g)
+    if (!byKey.has(k)) continue
+    const target = e.step === 'paid' ? paid : e.step === 'wizard_start' ? started : null
+    if (!target) continue
+    if (!target.has(k)) target.set(k, new Set())
+    target.get(k)!.add(e.anonId)
+  }
+  for (const [k, set] of started) byKey.get(k)!.trialsStarted += set.size
+  for (const [k, set] of paid) byKey.get(k)!.trialsPaid += set.size
+  for (const a of registeredAccounts()) {
+    const b = byKey.get(bucketKey(new Date(a.createdAt), g))
+    if (b) b.signups += 1
+  }
+}
+
+function funnelFromEvents(): FunnelStep[] {
+  const agg = new Map<string, { product: 'employer' | 'jobseeker'; step: string; index: number; ids: Set<string> }>()
+  for (const e of readEvents()) {
+    const k = `${e.product}:${e.step}`
+    if (!agg.has(k)) agg.set(k, { product: e.product, step: e.step, index: e.stepIndex, ids: new Set() })
+    agg.get(k)!.ids.add(e.anonId)
+  }
+  const real = [...agg.values()].map((a) => ({ product: a.product, step: a.step, index: a.index, count: a.ids.size }))
+  // ฐานจำลองให้ funnel มีรูปร่าง (ลดหลั่นตามขั้น)
+  const base: FunnelStep[] = []
+  const steps: Record<'employer' | 'jobseeker', string[]> = {
+    employer: ['wizard_start', 'step_subject', 'step_org', 'step_addons', 'step_review', 'checkout_view', 'login_gate', 'paid'],
+    jobseeker: ['wizard_start', 'step_me', 'step_company', 'step_review', 'checkout_view', 'login_gate', 'paid'],
+  }
+  for (const product of ['employer', 'jobseeker'] as const) {
+    const list = steps[product]
+    let n = product === 'employer' ? 84 : 126
+    list.forEach((step, i) => {
+      const r = real.find((x) => x.product === product && x.step === step)
+      base.push({ product, step, index: step === 'paid' ? 99 : i, count: n + (r?.count ?? 0) })
+      n = Math.round(n * (step === 'login_gate' ? 0.55 : 0.82))
+    })
+  }
+  return base
+}
+
+function dropoffsFromEvents(): DropoffUser[] {
+  const byAnon = new Map<string, DropoffUser & { paid: boolean }>()
+  for (const e of [...readEvents()].sort((a, b) => a.at.localeCompare(b.at))) {
+    const k = `${e.anonId}:${e.product}`
+    const acc = e.userEmail ? findAccount(e.userEmail) : null
+    const cur = byAnon.get(k) ?? {
+      anonId: e.anonId,
+      userId: e.userEmail,
+      email: e.userEmail ?? '',
+      name: acc?.name ?? '',
+      product: e.product,
+      lastStep: e.step,
+      lastStepIndex: e.stepIndex,
+      firstAt: e.at,
+      lastSeenAt: e.at,
+      hasCredit: e.userEmail ? usableCredit(e.userEmail, e.product) !== null : false,
+      paid: false,
+    }
+    if (e.step === 'paid') cur.paid = true
+    if (e.stepIndex >= cur.lastStepIndex) {
+      cur.lastStep = e.step
+      cur.lastStepIndex = e.stepIndex
+    }
+    cur.lastSeenAt = e.at
+    if (e.userEmail) {
+      cur.userId = e.userEmail
+      cur.email = e.userEmail
+      cur.name = acc?.name ?? cur.name
+    }
+    byAnon.set(k, cur)
+  }
+  const real = [...byAnon.values()].filter((d) => !d.paid).map(({ paid: _p, ...d }) => d)
+  // ตัวอย่างสองรายให้เห็นหน้าตาตาราง (คนที่ล็อกอินแล้วแต่ไม่จ่าย / คนที่ยังไม่สมัคร)
+  const h = (n: number) => new Date(Date.now() - n * 3_600_000).toISOString()
+  const samples: DropoffUser[] = [
+    { anonId: 'anon-sample-1', userId: 'somsri@gmail.com', email: 'somsri@gmail.com', name: 'สมศรี ใจดี', product: 'jobseeker', lastStep: 'checkout_view', lastStepIndex: 4, firstAt: h(30), lastSeenAt: h(29), hasCredit: usableCredit('somsri@gmail.com', 'jobseeker') !== null },
+    { anonId: 'anon-sample-2', userId: null, email: '', name: '', product: 'employer', lastStep: 'login_gate', lastStepIndex: 6, firstAt: h(52), lastSeenAt: h(51), hasCredit: false },
+  ]
+  return [...real, ...samples].sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
 }
 
 /* ── แกะลิงก์ Google Maps ฝั่งเบราว์เซอร์ (F-08) ───────────
@@ -735,6 +1020,20 @@ export const mockClient: MingheClient = {
   async createOrder(token, draft) {
     const email = emailFromToken(token)
     const code = generateAccessCode()
+
+    // สิทธิ์ทดลองที่แอดมินให้ไว้ — หักอัตโนมัติเหมือน API จริง (ยอดเป็น 0 แต่ยังออกใบเสร็จ)
+    const credit = draft.skipCredit ? null : usableCredit(email, draft.product)
+    if (credit) {
+      const credits = readCredits()
+      const target = credits.find((c) => c.id === credit.id)
+      if (target) {
+        target.status = 'used'
+        target.usedOrderId = code
+        target.usedAt = new Date().toISOString()
+        writeJSON(CREDITS_KEY, credits)
+      }
+    }
+
     const order: OrderRecord = {
       id: code,
       code,
@@ -742,10 +1041,18 @@ export const mockClient: MingheClient = {
       status: 'ready',
       subjectName: draft.input.subject.name,
       orgLabel: draft.orgLabel,
-      total: draft.total,
+      total: credit ? 0 : draft.total,
       express: draft.express ?? false,
       createdAt: new Date().toISOString(),
       input: draft.input,
+      paymentMethod: credit ? 'credit' : 'pending_gateway',
+    }
+
+    if (draft.anonId) {
+      writeJSON(EVENTS_KEY, [
+        ...readEvents().slice(-1999),
+        { anonId: draft.anonId, userEmail: email, product: draft.product, step: 'paid', stepIndex: 99, at: order.createdAt },
+      ])
     }
 
     const book = readOrders()
@@ -1076,5 +1383,149 @@ export const mockClient: MingheClient = {
       { slug: 'refund', title: 'นโยบายการคืนเงินและการขอลบบัญชี', version: '0.1-draft', status: 'draft' },
       { slug: 'cookies', title: 'นโยบายคุกกี้', version: '0.1-draft', status: 'draft' },
     ]
+  },
+
+  /* ── Bill & Payment / สิทธิ์ทดลอง / สถิติ ──────────────── */
+
+  async meProfile(token): Promise<MeProfile> {
+    const account = accountByEmail(emailFromToken(token))
+    const meta = readJSON<Record<string, { name?: string; phone?: string }>>(PROFILE_META_KEY, {})[account.email] ?? {}
+    const registered = registeredAccounts().find((a) => a.email === account.email)
+    return {
+      ...toSessionUser({ ...account, name: meta.name ?? account.name }),
+      phone: meta.phone ?? '',
+      provider: 'email',
+      createdAt: registered?.createdAt ?? '2026-08-01T09:00:00.000Z',
+      lastLoginAt: new Date().toISOString(),
+    }
+  },
+
+  async updateMe(token, input): Promise<MeProfile> {
+    const email = emailFromToken(token)
+    const all = readJSON<Record<string, { name?: string; phone?: string }>>(PROFILE_META_KEY, {})
+    all[email] = { ...all[email], ...(input.name ? { name: input.name.trim() } : {}), ...(input.phone !== undefined ? { phone: input.phone.trim() } : {}) }
+    writeJSON(PROFILE_META_KEY, all)
+    // บัญชีที่สมัครเองเปลี่ยนชื่อได้จริง (บัญชีทดลองเก็บเป็น override)
+    if (input.name) {
+      const accounts = registeredAccounts()
+      const mine = accounts.find((a) => a.email === email)
+      if (mine) {
+        mine.name = input.name.trim()
+        writeJSON(ACCOUNTS_KEY, accounts)
+      }
+    }
+    return this.meProfile(token)
+  },
+
+  async listMyPayments(token, organizationId): Promise<PaymentRecord[]> {
+    const email = emailFromToken(token)
+    const mine = paymentsOf(email, ordersFor(email))
+    if (!organizationId) return mine
+    // องค์กรเดียวกัน (บัญชีทดลอง owner + HR) เห็นใบเสร็จร่วมกัน
+    const account = findAccount(email)
+    const peers = [...MOCK_ACCOUNTS, ...registeredAccounts()]
+      .filter((a) => a.side === 'employer' && a.email !== email)
+      .filter((a) => ('organizationName' in a ? a.organizationName : DEMO_ORG_NAME) === (account?.organizationName ?? DEMO_ORG_NAME))
+    const extra = peers.flatMap((a) => paymentsOf(a.email, ordersFor(a.email)))
+    return [...mine, ...extra].sort((a, b) => b.paidAt.localeCompare(a.paidAt))
+  },
+
+  async listMyCredits(token): Promise<UserCredit[]> {
+    const email = emailFromToken(token)
+    return readCredits().filter((c) => c.userId === email)
+  },
+
+  async trackEvent(input, token) {
+    let userEmail: string | null = null
+    try {
+      userEmail = token ? emailFromToken(token) : null
+    } catch {
+      userEmail = null
+    }
+    writeJSON(EVENTS_KEY, [
+      ...readEvents().slice(-1999),
+      { anonId: input.anonId, userEmail, product: input.product, step: input.step, stepIndex: input.stepIndex, at: new Date().toISOString() },
+    ])
+  },
+
+  async adminStats(token, granularity): Promise<AdminStats> {
+    requireAdmin(token)
+    const keys = bucketKeys(granularity)
+    const series = keys.map((k) => synthBucket(k, granularity))
+    realBucketsInto(series, granularity)
+    const monthKey = bucketKey(new Date(), 'month')
+    const thisMonth = synthBucket(monthKey, 'month')
+    realBucketsInto([thisMonth], 'month')
+    return {
+      granularity,
+      from: keys[0],
+      to: keys[keys.length - 1],
+      series,
+      thisMonth,
+      funnel: funnelFromEvents(),
+      dropoffs: dropoffsFromEvents(),
+    }
+  },
+
+  async adminListPayments(token, filter): Promise<PaymentRecord[]> {
+    requireAdmin(token)
+    const q = filter?.search?.trim().toLowerCase() ?? ''
+    return allPayments().filter(
+      (p) =>
+        (!filter?.product || p.product === filter.product) &&
+        (!filter?.status || p.status === filter.status) &&
+        (!q || p.receiptNo.toLowerCase().includes(q) || p.customerEmail.toLowerCase().includes(q) || p.orderCode.toLowerCase().includes(q)),
+    )
+  },
+
+  async adminRefundPayment(token, id, input) {
+    const me = requireAdmin(token)
+    const payment = allPayments().find((p) => p.id === id)
+    if (!payment) throw new ClientError('ไม่พบรายการชำระเงินนี้', 404)
+    if (payment.status === 'refunded') throw new ClientError('รายการนี้คืนเงินเต็มจำนวนไปแล้ว', 409)
+    const remaining = payment.amount - payment.refundAmount
+    const amount = !input.amount || input.amount <= 0 || input.amount > remaining ? remaining : input.amount
+    writeJSON(REFUNDS_KEY, {
+      ...readRefunds(),
+      [payment.orderCode]: { amount: payment.refundAmount + amount, reason: input.reason, by: me.name, at: new Date().toISOString() },
+    })
+  },
+
+  async adminListCredits(token, userId): Promise<UserCredit[]> {
+    requireAdmin(token)
+    return readCredits()
+      .filter((c) => !userId || c.userId === userId)
+      .map((c) => ({ ...c, userEmail: c.userId, userName: findAccount(c.userId)?.name ?? mockUsers().find((u) => u.id === c.userId)?.name ?? '' }))
+  },
+
+  async adminGrantCredit(token, userId, input) {
+    const me = requireAdmin(token)
+    if (!mockUsers().some((u) => u.id === userId)) throw new ClientError('ไม่พบผู้ใช้นี้', 404)
+    const qty = Math.min(10, Math.max(1, input.quantity ?? 1))
+    const expiresAt = input.expiresDays ? new Date(Date.now() + input.expiresDays * 86_400_000).toISOString() : null
+    const fresh: StoredCredit[] = Array.from({ length: qty }, () => ({
+      id: nextId('cr'),
+      userId,
+      product: input.product ?? 'any',
+      depth: input.depth ?? '',
+      note: input.note ?? '',
+      grantedBy: me.name,
+      status: 'available',
+      usedOrderId: null,
+      usedAt: null,
+      expiresAt,
+      createdAt: new Date().toISOString(),
+    }))
+    writeJSON(CREDITS_KEY, [...fresh, ...readCredits()])
+  },
+
+  async adminRevokeCredit(token, id) {
+    requireAdmin(token)
+    const credits = readCredits()
+    const target = credits.find((c) => c.id === id)
+    if (!target) throw new ClientError('ไม่พบสิทธิ์นี้', 404)
+    if (target.status === 'used') throw new ClientError('สิทธิ์นี้ถูกใช้ไปแล้ว ยกเลิกไม่ได้', 409)
+    target.status = 'revoked'
+    writeJSON(CREDITS_KEY, credits)
   },
 }

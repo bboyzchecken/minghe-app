@@ -10,8 +10,8 @@ import (
 )
 
 type modeResponse struct {
-	Mode               string               `json:"mode"`
-	GoogleLoginEnabled bool                 `json:"google_login_enabled"`
+	Mode               string `json:"mode"`
+	GoogleLoginEnabled bool   `json:"google_login_enabled"`
 	// GoogleClientID ปล่อยออกได้โดยไม่เป็นความลับ (ฝังในหน้าเว็บอยู่แล้วตามสเปกของ Google)
 	// ส่งผ่าน API แทนการฝังตอน build เพราะหน้าเว็บเป็น static export — ได้ client id มาแล้ว
 	// ตั้งค่าที่ .env ฝั่งเดียวแล้วรีสตาร์ต API พอ ไม่ต้อง build หน้าเว็บใหม่ (F-02)

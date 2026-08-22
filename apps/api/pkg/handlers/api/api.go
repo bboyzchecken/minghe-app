@@ -25,6 +25,7 @@ type Server struct {
 	OrderStore        models.OrderStore
 	ReportStore       models.ReportStore
 	ConsentStore      models.ConsentStore
+	BillingStore      models.BillingStore
 
 	Email   *email.EmailService
 	Storage *storage.StorageService
@@ -39,6 +40,7 @@ func NewServer(
 	orderStore models.OrderStore,
 	reportStore models.ReportStore,
 	consentStore models.ConsentStore,
+	billingStore models.BillingStore,
 	emailService *email.EmailService,
 	storageService *storage.StorageService,
 ) *Server {
@@ -51,6 +53,7 @@ func NewServer(
 		OrderStore:        orderStore,
 		ReportStore:       reportStore,
 		ConsentStore:      consentStore,
+		BillingStore:      billingStore,
 		Email:             emailService,
 		Storage:           storageService,
 	}
@@ -100,6 +103,9 @@ func (s *Server) Start() error {
 	// ใช้ OptionalJwt เพราะผู้ใช้ยอมรับเงื่อนไขได้ก่อนล็อกอิน (โฟลว์ trial)
 	e.POST("/consents", s.CreateConsent, s.OptionalJwt())
 
+	/* ── funnel event (สาธารณะ) — สถิติ "ลองเล่นแล้วไปสะดุดตรงไหน" ─ */
+	e.POST("/events", s.TrackEvent, s.OptionalJwt())
+
 	/* ── แกะลิงก์ Google Maps (สาธารณะ) — F-08 ──────────── */
 	// ต้องเรียกได้ก่อนล็อกอิน เพราะผู้ใช้กรอกฟอร์มได้ก่อนสมัคร (F-03)
 	e.POST("/geo/resolve", s.ResolvePlace)
@@ -113,6 +119,8 @@ func (s *Server) Start() error {
 	api.GET("/me", s.GetMe)
 	api.PATCH("/me", s.UpdateMe)
 	api.DELETE("/me", s.RequestAccountDeletion) // F-01 — สิทธิขอลบบัญชี
+	api.GET("/me/payments", s.ListMyPayments)   // Bill & Payment + ใบเสร็จย้อนหลัง
+	api.GET("/me/credits", s.ListMyCredits)     // สิทธิ์ทดลองที่แอดมินให้
 
 	// ระบบ memory — F-25
 	api.GET("/profiles", s.ListProfiles)
@@ -157,6 +165,12 @@ func (s *Server) Start() error {
 	admin.POST("/orders/:id/process", s.AdminProcessOrder)
 	admin.POST("/orders/:id/deliver", s.AdminDeliverOrder)
 	admin.GET("/legal", s.AdminListLegalDocuments)
+	admin.GET("/stats", s.AdminStats)                        // รายได้/ผู้ใช้/funnel ย้อนหลัง วัน-เดือน-ปี
+	admin.GET("/payments", s.AdminListPayments)              // Bill & Payment ทุกราย
+	admin.POST("/payments/:id/refund", s.AdminRefundPayment) // บันทึกคืนเงิน
+	admin.GET("/credits", s.AdminListCredits)                // สิทธิ์ทดลองที่เคยให้
+	admin.POST("/users/:id/credits", s.AdminGrantCredit)     // ให้สิทธิ์ทดลอง (ลูกค้าทักไลน์)
+	admin.DELETE("/credits/:id", s.AdminRevokeCredit)
 	admin.POST("/legal", s.AdminUpsertLegalDocument)
 
 	port := s.Config.Port

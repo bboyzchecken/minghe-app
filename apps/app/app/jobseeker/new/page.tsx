@@ -19,7 +19,9 @@ import {
   thb,
 } from '@/lib/pricing'
 import { useCreateOrder } from '@/lib/queries'
+import { CreditNotice, useApplicableCredit } from '@/components/credit-notice'
 import { rememberReturnTo, useSession } from '@/lib/session'
+import { anonId, track } from '@/lib/track'
 import { clearWizardDraft, loadWizardDraft, saveCurrentOrder, saveWizardDraft } from '@/lib/store'
 
 const DRAFT_KEY = 'jobseeker'
@@ -89,6 +91,18 @@ export default function JobSeekerWizard() {
   const canNext = step === 0 ? meOk : step === 1 ? companyOk : true
 
   const total = billing === 'payperview' ? JOBSEEKER_PAY_PER_VIEW_PRICE : JOBSEEKER_PLAN_PRICE
+  const [skipCredit, setSkipCredit] = useState(false)
+  const credit = useApplicableCredit('jobseeker')
+  const payable = credit && !skipCredit ? 0 : null
+
+  // funnel — บอกแอดมินว่าคนที่ลองเล่นไปถึงขั้นไหน (ไม่เก็บข้อมูลที่กรอก)
+  const { token } = useSession()
+  useEffect(() => {
+    const names = ['step_me', 'step_company', 'checkout_view']
+    if (step === 0) track('jobseeker', 'wizard_start', 0, token)
+    track('jobseeker', names[step] ?? `step_${step}`, step + 1, token)
+    if (step === 2 && !sessionLoading && !user) track('jobseeker', 'login_gate', 5, token)
+  }, [step, sessionLoading, user, token])
   const priceLines: PriceLine[] =
     billing === 'payperview'
       ? [{ label: 'เช็กความสมพงษ์ 1 บริษัท (Pay-per-view)', amount: JOBSEEKER_PAY_PER_VIEW_PRICE }]
@@ -140,6 +154,8 @@ export default function JobSeekerWizard() {
         input: buildInput(),
         orgLabel: orgLabel(),
         orgMode: companyMode,
+        anonId: anonId(),
+        skipCredit,
       })
       saveCurrentOrder(order)
       router.push('/report')
@@ -307,6 +323,7 @@ export default function JobSeekerWizard() {
                 <div className="mt-6 rounded-lg border border-line bg-cloud px-4 py-3 text-sm text-ink-soft">
                   ชำระเงินในนาม <span className="font-medium text-ink">{user.name}</span> ({user.email})
                 </div>
+                <CreditNotice credit={credit} skip={skipCredit} onSkipChange={setSkipCredit} />
 
                 {/* F-06 — กล่องยินยอมต้องถูกติ๊กก่อนจึงจะชำระเงินได้ */}
                 <ConsentCheckbox checked={consented} onChange={setConsented} />
@@ -322,7 +339,7 @@ export default function JobSeekerWizard() {
                   disabled={!consented}
                   className="btn-primary mt-4 w-full py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  ยืนยันชำระ {thb(total)} บาท และดูผล
+                  {payable === 0 ? 'ใช้สิทธิ์ทดลอง (0 บาท) และดูผล' : `ยืนยันชำระ ${thb(total)} บาท และดูผล`}
                 </button>
                 {!consented && (
                   <p className="mt-3 text-center text-xs text-muted">

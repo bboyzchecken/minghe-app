@@ -1,235 +1,168 @@
 'use client'
 
+/**
+ * Employer · ภาพรวม — โฟกัส "งานล่าสุด + สิ่งที่ต้องรู้" ในจอเดียว
+ * รายละเอียดการเงินอยู่ที่ /employer/billing · ข้อมูลบัญชีที่ /employer/profile
+ */
+
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback } from 'react'
-import { ElementIcon } from '@/components/element-icon'
-import { RequireLogin } from '@/components/require-login'
-import { RoleBadge } from '@/components/role-badge'
 import { OrgMembersCard } from '@/components/org-members-card'
-import { RoleCapabilities } from '@/components/role-capabilities'
-import type { OrderRecord, SavedProfile } from '@/lib/api'
-import { useOrders, useSavedProfiles, useTeams } from '@/lib/queries'
+import { Icon } from '@/components/workspace/icons'
+import { WorkspaceShell, employerNav } from '@/components/workspace/shell'
+import { Badge, EmptyState, PageHeader, Panel, Skeleton, StatTile, TableWrap, baht, fmtDate } from '@/components/workspace/ui'
+import type { OrderRecord } from '@/lib/api'
+import { EMPLOYER_WEEKLY_QUOTA } from '@/lib/pricing'
+import { useMyCredits, useMyPayments, useOrders, useSavedProfiles, useTeams } from '@/lib/queries'
 import { useSession } from '@/lib/session'
-import { thb } from '@/lib/pricing'
 import { saveCurrentOrder } from '@/lib/store'
 
 export default function EmployerDashboardPage() {
   return (
-    <RequireLogin path="/employer/dashboard">
+    <WorkspaceShell nav={employerNav} brand="บัญชีองค์กร" requirePath="/employer/dashboard">
       <EmployerDashboard />
-    </RequireLogin>
+    </WorkspaceShell>
   )
 }
 
 function EmployerDashboard() {
   const router = useRouter()
   const { user } = useSession()
-  const { data: orders, isPending, error } = useOrders('employer')
+  const orders = useOrders('employer')
+  const payments = useMyPayments()
+  const credits = useMyCredits()
+  const profiles = useSavedProfiles()
+  const teams = useTeams()
 
-  const openReport = useCallback(
-    (order: OrderRecord) => {
-      saveCurrentOrder(order)
-      router.push('/report')
-    },
-    [router],
-  )
+  const rows = orders.data ?? []
+  const weekAgo = Date.now() - 7 * 86_400_000
+  const thisWeek = rows.filter((o) => new Date(o.createdAt).getTime() > weekAgo).length
+  const ym = new Date().toISOString().slice(0, 7)
+  const spentMonth = (payments.data ?? []).filter((p) => p.paidAt.slice(0, 7) === ym).reduce((s, p) => s + p.amount - p.refundAmount, 0)
+  const available = (credits.data ?? []).filter((c) => c.status === 'available').length
 
-  const rows = orders ?? []
-  const readyThisWeek = rows.filter((o) => o.status === 'ready').length
+  function open(order: OrderRecord) {
+    saveCurrentOrder(order)
+    router.push('/report')
+  }
 
   return (
-    <div className="container-page py-10 md:py-14">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <span className="eyebrow">Employer · Dashboard</span>
-          <h1 className="mt-2 text-3xl">ภาพรวมองค์กร</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-soft">
-            {user?.organizationName ?? 'บัญชีองค์กร'} · เข้าใช้โดย {user?.name}
-            {user && <RoleBadge user={user} />}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/employer/memory" className="btn-ghost !py-2 text-sm">
-            คลังข้อมูล
+    <>
+      <PageHeader
+        eyebrow={user?.organizationName ?? 'บัญชีองค์กร'}
+        title={`สวัสดี ${user?.name?.split(' ')[0] ?? ''}`}
+        description={`เข้าใช้ในฐานะ${user?.orgRole === 'hr' ? 'ฝ่ายบุคคล (HR)' : 'เจ้าของบัญชี'} · ${new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`}
+        actions={
+          <Link href="/employer/new" className="ws-btn-primary">
+            <Icon name="plus" size={15} /> วิเคราะห์ candidate ใหม่
           </Link>
-          <Link href="/employer/new" className="btn-primary">
-            + วิเคราะห์ candidate ใหม่
-          </Link>
+        }
+      />
+
+      {available > 0 && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ws-success/40 bg-ws-success-soft/50 px-4 py-3">
+          <div className="flex items-center gap-3 text-sm">
+            <Icon name="gift" size={18} className="text-ws-success" />
+            <span className="text-ws-ink">คุณมีสิทธิ์วิเคราะห์ฟรี <b>{available}</b> ครั้ง — หักให้อัตโนมัติตอนชำระเงิน</span>
+          </div>
+          <Link href="/employer/new" className="ws-btn-primary ws-btn-sm">ใช้สิทธิ์</Link>
         </div>
+      )}
+
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="วิเคราะห์สัปดาห์นี้" value={`${thisWeek} / ${EMPLOYER_WEEKLY_QUOTA}`} icon="chart" tone="accent" hint="โควตาแพ็กรายเดือน · รีเซ็ตทุกจันทร์" />
+        <StatTile label="รายงานทั้งหมด" value={orders.isPending ? '—' : rows.length} icon="file" hint="ตลอดการใช้งาน" />
+        <StatTile label="ค่าใช้จ่ายเดือนนี้" value={baht(spentMonth)} icon="wallet" hint={<Link href="/employer/billing" className="text-ws-accent hover:underline">ดูใบเสร็จ</Link>} />
+        <StatTile label="คลังข้อมูล" value={profiles.data ? profiles.data.length : '—'} icon="database" hint={`โปรไฟล์ · ${teams.data?.length ?? 0} ทีม`} />
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard el="metal" label="โควตาสัปดาห์นี้" value={`${Math.min(readyThisWeek, 6)} / 6`} sub="รีเซ็ตทุกวันจันทร์" />
-        <StatCard el="water" label="แพ็กเกจ" value="Employer" sub="699 บาท/เดือน" />
-        <StatCard el="wood" label="รายงานทั้งหมด" value={isPending ? '—' : String(rows.length)} sub="ตลอดการใช้งาน" />
-        <StatCard el="fire" label="ผลิตภัณฑ์" value="Fit Report" sub="ปาจือ + ทีม" />
-      </div>
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
-          <h2 className="text-xl">ประวัติการวิเคราะห์</h2>
-
-          {error && (
-            <p className="mt-4 rounded-lg border border-terracotta/40 bg-terracotta/[0.07] px-4 py-2.5 text-sm text-terracotta">
-              {error.message}
-            </p>
-          )}
-
-          {isPending ? (
-            <div className="mt-4 space-y-2" aria-hidden="true">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="h-11 animate-pulse rounded-lg bg-paper-warm" />
-              ))}
-            </div>
+      <div className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
+        <Panel title="ประวัติการวิเคราะห์" description="กดรหัสเพื่อเปิดรายงาน" action={rows.length > 0 ? <Link href="/employer/new" className="ws-btn-ghost ws-btn-sm">วิเคราะห์ใหม่</Link> : undefined} padded={false}>
+          {orders.error && <p className="m-4 rounded-lg bg-ws-danger-soft px-3 py-2 text-sm text-ws-danger">{orders.error.message}</p>}
+          {orders.isPending ? (
+            <div className="p-5"><Skeleton rows={3} height="h-11" /></div>
           ) : rows.length === 0 ? (
-            <div className="mt-6 rounded-lg border border-dashed border-line bg-paper-warm/40 p-8 text-center">
-              <p className="text-sm text-ink-soft">ยังไม่มีรายงาน — เริ่มวิเคราะห์ candidate คนแรกได้เลย</p>
-              <Link href="/employer/new" className="btn-ghost mt-4 !py-2 text-sm">
-                เริ่มวิเคราะห์
-              </Link>
+            <div className="p-5">
+              <EmptyState icon="file" title="ยังไม่มีรายงาน" hint="เริ่มวิเคราะห์ candidate คนแรกได้เลย" action={<Link href="/employer/new" className="ws-btn-primary ws-btn-sm">เริ่มวิเคราะห์</Link>} />
             </div>
           ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-xs text-muted">
-                    <th className="pb-2 font-medium">ผู้ถูกวิเคราะห์</th>
-                    <th className="pb-2 font-medium">ฝ่ายองค์กร</th>
-                    <th className="pb-2 font-medium">ยอดชำระ</th>
-                    <th className="pb-2 font-medium">สถานะ</th>
-                    <th className="pb-2 font-medium">รหัสเปิด</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((order) => (
-                    <tr key={order.code} className="border-b border-line/60 last:border-0">
-                      <td className="py-3 text-ink">{order.subjectName}</td>
-                      <td className="py-3 text-ink-soft">{order.orgLabel}</td>
-                      <td className="py-3 text-ink-soft">{thb(order.total)} ฿</td>
-                      <td className="py-3">
-                        <StatusChip status={order.status} />
-                      </td>
-                      <td className="py-3">
-                        {order.status === 'ready' ? (
-                          <button
-                            onClick={() => openReport(order)}
-                            className="font-body-en text-xs text-gold hover:underline"
-                          >
-                            {order.code}
-                          </button>
-                        ) : (
-                          <span className="font-body-en text-xs text-muted">{order.code}</span>
-                        )}
-                      </td>
+            <>
+              <ul className="divide-y divide-ws-border md:hidden">
+                {rows.map((o) => (
+                  <li key={o.code} className="flex items-center justify-between gap-3 p-4">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-ws-ink">{o.subjectName}</div>
+                      <div className="truncate text-xs text-ws-muted">{o.orgLabel} · {fmtDate(o.createdAt)}</div>
+                      <div className="mt-1 flex items-center gap-1.5"><StatusBadge o={o} /><span className="ws-mono text-xs text-ws-muted">{baht(o.total)}</span></div>
+                    </div>
+                    <button onClick={() => open(o)} disabled={o.status !== 'ready'} className="ws-btn-soft ws-btn-sm flex-none">เปิด</button>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden px-5 md:block">
+                <TableWrap>
+                  <thead>
+                    <tr>
+                      <th className="ws-th">ผู้ถูกวิเคราะห์</th>
+                      <th className="ws-th">ฝ่ายองค์กร</th>
+                      <th className="ws-th text-right">ยอด</th>
+                      <th className="ws-th">สถานะ</th>
+                      <th className="ws-th">วันที่</th>
+                      <th className="ws-th">รหัสเปิด</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {rows.map((o) => (
+                      <tr key={o.code} className="ws-row">
+                        <td className="ws-td font-medium">{o.subjectName}</td>
+                        <td className="ws-td text-ws-soft">{o.orgLabel}</td>
+                        <td className="ws-td ws-mono text-right">{baht(o.total)}</td>
+                        <td className="ws-td"><StatusBadge o={o} /></td>
+                        <td className="ws-td text-xs text-ws-muted">{fmtDate(o.createdAt)}</td>
+                        <td className="ws-td">
+                          {o.status === 'ready' ? (
+                            <button onClick={() => open(o)} className="ws-mono text-xs font-medium text-ws-accent hover:underline">{o.code}</button>
+                          ) : (
+                            <span className="ws-mono text-xs text-ws-faint">{o.code}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </TableWrap>
+              </div>
+            </>
           )}
+        </Panel>
+
+        <div className="space-y-5">
+          <Panel title="คลังข้อมูลองค์กร" description="ระบบจำโปรไฟล์และทีมที่เคยกรอกไว้ให้" action={<Link href="/employer/memory" className="ws-btn-ghost ws-btn-sm">จัดการ</Link>}>
+            <ul className="space-y-2 text-sm">
+              <MemoryRow icon="shield" title="Company Profile" detail={user?.organizationName ?? 'ยังไม่ได้ตั้งค่า'} />
+              <MemoryRow icon="users" title="โปรไฟล์ที่บันทึกไว้" detail={profiles.isPending ? 'กำลังโหลด…' : profiles.data && profiles.data.length > 0 ? `${profiles.data.length} คน` : 'ยังไม่มี — บันทึกอัตโนมัติเมื่อสั่งวิเคราะห์'} />
+              <MemoryRow icon="database" title="Team Roster" detail={teams.data && teams.data.length > 0 ? `${teams.data.length} ทีม` : 'ยังไม่มีทีม'} />
+            </ul>
+          </Panel>
+          {user && <div className="[&>div]:!rounded-2xl [&>div]:!border-ws-border [&>div]:!bg-ws-surface [&>div]:!shadow-ws"><OrgMembersCard user={user} /></div>}
         </div>
-
-        <div className="space-y-6">
-          {user && <RoleCapabilities user={user} />}
-
-          {/* F-25 — สรุปคลังข้อมูลจริง ไม่ใช่ข้อความบรรยายเปล่า ๆ */}
-          <MemorySummaryCard organizationName={user?.organizationName} />
-
-          {/* F-05 — สมาชิกจริง + ฟอร์มเชิญ (จุดที่เจ้าของกับ HR ต่างกันชัดที่สุด) */}
-          {user && <OrgMembersCard user={user} />}
-        </div>
       </div>
-    </div>
+    </>
   )
 }
 
-function StatusChip({ status }: { status: OrderRecord['status'] }) {
-  const meta =
-    status === 'ready'
-      ? { th: 'พร้อมแล้ว', color: '#7B8B57' }
-      : { th: 'รอชำระเงิน', color: '#BE8A2E' }
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: meta.color }}>
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.color }} />
-      {meta.th}
-    </span>
-  )
+function StatusBadge({ o }: { o: OrderRecord }) {
+  if (o.status === 'ready') return <Badge tone="success" dot>{o.paymentMethod === 'credit' ? 'พร้อม · สิทธิ์ทดลอง' : 'พร้อมแล้ว'}</Badge>
+  return <Badge tone="warn" dot>รอชำระเงิน</Badge>
 }
 
-function StatCard({ el, label, value, sub }: { el: 'metal' | 'water' | 'wood' | 'fire'; label: string; value: string; sub: string }) {
+function MemoryRow({ icon, title, detail }: { icon: 'shield' | 'users' | 'database'; title: string; detail: string }) {
   return (
-    <div className="rounded-xl border border-line bg-card p-5 shadow-soft">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted">{label}</span>
-        <ElementIcon element={el} size={18} />
+    <li className="flex items-start gap-3 rounded-lg bg-ws-raised px-3 py-2">
+      <Icon name={icon} size={16} className="mt-0.5 text-ws-accent" />
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-ws-ink">{title}</div>
+        <div className="truncate text-xs text-ws-muted">{detail}</div>
       </div>
-      <div className="mt-2 text-2xl font-semibold text-ink">{value}</div>
-      <div className="text-xs text-muted">{sub}</div>
-    </div>
-  )
-}
-
-/**
- * สรุปว่าคลังข้อมูลมีอะไรอยู่จริงบ้าง แล้วพาไปหน้าจัดการ (F-25)
- * ตัวเลขมาจากแหล่งข้อมูลเดียวกับหน้าคลัง จึงไม่มีทางบอกไม่ตรงกัน
- */
-function MemorySummaryCard({ organizationName }: { organizationName?: string }) {
-  const { data: profiles = [], isPending } = useSavedProfiles()
-  const { data: teams = [] } = useTeams()
-  const count = (kind: SavedProfile['kind']) => profiles.filter((p) => p.kind === kind).length
-
-  return (
-    <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg">คลังข้อมูลองค์กร</h2>
-        <Link href="/employer/memory" className="text-xs text-gold hover:underline">
-          จัดการ →
-        </Link>
-      </div>
-      <p className="mt-2 text-sm text-ink-soft">
-        ระบบจำโปรไฟล์และทีมที่เคยกรอกไว้ให้ — เลือกใช้ซ้ำได้ในการวิเคราะห์ครั้งถัดไป
-      </p>
-
-      <div className="mt-3 space-y-3">
-        <MemoryRow icon="earth" title="Company Profile" detail={organizationName ?? 'ยังไม่ได้ตั้งค่า'} />
-        <MemoryRow
-          icon="water"
-          title="โปรไฟล์ที่บันทึกไว้"
-          detail={
-            isPending
-              ? 'กำลังโหลด…'
-              : profiles.length === 0
-                ? 'ยังไม่มี — บันทึกอัตโนมัติเมื่อสั่งวิเคราะห์ครั้งแรก'
-                : `${profiles.length} คน · ผู้บริหาร ${count('executive')} · พนักงาน ${count('employee')} · ผู้สมัคร ${count('candidate')}`
-          }
-        />
-        <MemoryRow
-          icon="wood"
-          title="Team Roster"
-          detail={teams.length === 0 ? 'ยังไม่มีทีม — ตั้งทีมแรกได้ในหน้าคลังข้อมูล' : `${teams.length} ทีม`}
-        />
-      </div>
-    </div>
-  )
-}
-
-function MemoryRow({
-  icon,
-  title,
-  detail,
-}: {
-  icon: 'earth' | 'water' | 'wood'
-  title: string
-  detail: string
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-lg bg-paper-warm/50 p-3">
-      <ElementIcon element={icon} size={18} />
-      <div>
-        <div className="text-sm font-medium text-ink">{title}</div>
-        <div className="text-xs text-ink-soft">{detail}</div>
-      </div>
-    </div>
+    </li>
   )
 }

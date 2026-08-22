@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { SessionUser } from '@/lib/api'
 import { homeForUser, useSession } from '@/lib/session'
 import { Logo } from './logo'
 import { RoleBadge } from './role-badge'
+import { isWorkspacePath } from './workspace/shell'
 
 const NAV = [
   { href: '/employer', label: 'สำหรับองค์กร' },
@@ -30,6 +31,10 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false)
   const { user, loading, signOut } = useSession()
   const router = useRouter()
+  const pathname = usePathname()
+
+  // หน้า workspace (dashboard / admin / โปรไฟล์) มีโครงของตัวเอง — ไม่ซ้อน header การตลาด
+  if (isWorkspacePath(pathname)) return null
 
   function handleSignOut() {
     signOut()
@@ -38,7 +43,7 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line/70 bg-paper/85 backdrop-blur-md">
+    <header className="no-print sticky top-0 z-40 border-b border-line/70 bg-paper/85 backdrop-blur-md">
       <div className="container-page flex h-16 items-center justify-between">
         {/* F-11 — โลโก้จริงแบบไม่มี tagline (ชิ้นที่ออกแบบมาสำหรับพื้นที่แคบ) */}
         <Logo variant="wordmark" height={34} />

@@ -82,6 +82,12 @@ sudo nano /opt/minghe/.env     # ตรวจ GMAIL_* / โดเมน / ปิ
 - [ ] เปลี่ยนรหัส `admin@minghe.work` ทันทีหลังล็อกอินครั้งแรก (seed สร้างด้วย `changeme1234`)
 - [ ] backup MySQL รายวัน (cron ตัวอย่างอยู่ท้าย `setup.sh`) + Lightsail snapshot รายสัปดาห์
 - [ ] `CORS_ALLOWED_ORIGINS` ครอบ `https://minghe.work,https://www.minghe.work,https://<project>.pages.dev`
+- [ ] **เอกสารกฎหมายผ่านการตรวจแล้ว** — เนื้อหาอยู่ที่ `apps/app/lib/legal/` ยังเป็นสถานะ `draft`
+      ต้องเติมข้อมูลนิติบุคคล + ตัวเลขเงื่อนไขคืนเงิน แล้วให้ผู้รับผิดชอบตรวจ ก่อนเปลี่ยน `status` เป็น `published`
+      และตั้ง `LEGAL_*_VERSION` ใน `.env` ให้ตรงกัน (บันทึกความยินยอมอ้างอิงเลขเวอร์ชันนี้)
+- [ ] **GB Prime Pay เชื่อมจริงแล้ว** — ตอนนี้หน้าชำระเงินบันทึกคำสั่งซื้อและออกรหัสทันทีโดย**ยังไม่ตัดเงินจริง**
+- [ ] Google login (ถ้าจะเปิด): `MINGHE_GOOGLE_LOGIN_ENABLED=true` + `GOOGLE_OAUTH_CLIENT_ID`
+      — ตั้งที่ฝั่ง API พอ ไม่ต้อง build หน้าเว็บใหม่ · redirect URI ต้องตรงกับโดเมนจริง
 
 ## 5. Rollback
 

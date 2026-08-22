@@ -83,6 +83,83 @@
   }
 }
 
+/* ---- Workspace (dashboard / admin / profile) ----
+   โทน "ทำงาน" แยกจากโทนกระดาษสาของหน้าการตลาด — พื้นเทาเย็น การ์ดขาว ปุ่มน้ำเงิน
+   ทุกฝั่ง (องค์กร / คนทำงาน / แอดมิน) ใช้ชุดเดียวกัน ต่างกันแค่เมนูและเนื้อหา */
+@layer components {
+  .ws-root {
+    @apply min-h-screen bg-ws-bg font-body-th text-ws-text antialiased;
+    background-image: none;
+  }
+  .ws-root h1,
+  .ws-root h2,
+  .ws-root h3,
+  .ws-root h4 {
+    @apply font-body-th text-ws-ink;
+    letter-spacing: 0;
+  }
+  .ws-panel {
+    @apply rounded-2xl border border-ws-border bg-ws-surface shadow-ws;
+  }
+  .ws-btn {
+    @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium
+      transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ws-btn-primary {
+    @apply ws-btn bg-ws-accent text-white hover:bg-ws-accent-deep;
+  }
+  .ws-btn-ghost {
+    @apply ws-btn border border-ws-border bg-ws-surface text-ws-text hover:bg-ws-raised;
+  }
+  .ws-btn-soft {
+    @apply ws-btn bg-ws-accent-soft text-ws-accent-deep hover:bg-blue-200;
+  }
+  .ws-btn-danger {
+    @apply ws-btn border border-ws-danger/30 bg-ws-surface text-ws-danger hover:bg-ws-danger-soft;
+  }
+  .ws-btn-sm {
+    @apply !px-2.5 !py-1.5 !text-xs;
+  }
+  .ws-input {
+    @apply w-full rounded-lg border border-ws-border bg-ws-surface px-3 py-2 text-sm text-ws-text outline-none
+      transition placeholder:text-ws-faint focus:border-ws-accent focus:ring-2 focus:ring-ws-accent/20;
+  }
+  .ws-label {
+    @apply mb-1 block text-xs font-medium text-ws-soft;
+  }
+  .ws-th {
+    @apply whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-ws-muted;
+  }
+  .ws-td {
+    @apply px-3 py-3 align-middle text-sm text-ws-text;
+  }
+  .ws-row {
+    @apply border-t border-ws-border/80 transition-colors hover:bg-ws-raised/70;
+  }
+  .ws-mono {
+    @apply font-body-en tabular-nums;
+  }
+}
+
+/* ใบเสร็จ: ตอนสั่งพิมพ์ให้เหลือแค่ใบเสร็จบนกระดาษ */
+@media print {
+  body.printing-receipt * {
+    visibility: hidden !important;
+  }
+  body.printing-receipt .receipt-print,
+  body.printing-receipt .receipt-print * {
+    visibility: visible !important;
+  }
+  body.printing-receipt .receipt-print {
+    position: absolute !important;
+    inset: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+}
+
 @layer utilities {
   /* เส้นคั่นทองบางๆ */
   .gold-divider {
@@ -125,23 +202,92 @@
   }
 }
 
-/* ---- Print (หน้ารายงาน) ---- */
+/* ---- Print / PDF (หน้ารายงาน) ----
+   เป้า: สี ขนาด และตำแหน่งการจัดวางใน PDF ตรงกับที่เห็นบนจอ (เดสก์ท็อป)
+   ส่วนการตัดหน้า จัดใหม่ให้เหมาะกับกระดาษ */
 @media print {
   @page {
-    margin: 14mm 12mm;
+    size: A4;
+    margin: 12mm 10mm 14mm;
   }
+
+  /* --- 1) สี --- */
+  /* เบราว์เซอร์ตัดพื้นหลังทิ้งตอนพิมพ์ — แถบสัดส่วนห้าธาตุ/การ์ดจะหาย จึงต้องบังคับ */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* พื้นหน้าเป็นขาว (ไม่เทอสีกระดาษสาเต็มหน้า) — สีของการ์ดแต่ละใบยังคงเดิม */
+  html,
+  body {
+    background: #ffffff !important;
+    background-image: none !important;
+  }
+
   .no-print {
     display: none !important;
   }
-  body {
-    background: #ffffff !important;
+
+  /* กัน animation ค้างสถานะตอนสั่งพิมพ์ */
+  .fade-up,
+  .animate-bounce {
+    animation: none !important;
   }
+
+  /* เงากลายเป็นคราบเทาตอนพิมพ์ — ใช้เส้นขอบเดิมที่มีอยู่แล้วแทน */
+  .shadow-card,
+  .shadow-soft,
+  .shadow-lift {
+    box-shadow: none !important;
+  }
+
+  /* --- 2) ขนาด & ตำแหน่งการจัดวาง --- */
+  /* พื้นที่พิมพ์ A4 กว้าง ~718px ซึ่งต่ำกว่า breakpoint md (768px)
+     Tailwind จึงยุบกริดเหลือคอลัมน์เดียว — ประกาศทับให้ผังเท่ากับที่เห็นบนจอ */
+  .container-page {
+    max-width: none !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  .report-doc {
+    max-width: none !important;
+    width: 100%;
+  }
+  .report-doc .md\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .report-doc .lg\:grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .report-doc .md\:p-8 {
+    padding: 2rem;
+  }
+  .report-doc .md\:p-9 {
+    padding: 2.25rem;
+  }
+
+  /* --- 3) การตัดหน้า (จัดใหม่ให้เหมาะกับกระดาษ) --- */
   .print-break-before {
     break-before: page;
   }
   .print-avoid-break {
     break-inside: avoid;
   }
+  /* หัวรายงานและกล่องสั้น — ห้ามผ่ากลาง */
+  .report-doc > header,
+  .report-section {
+    break-inside: avoid;
+  }
+  /* กล่องที่ยาวเกินหนึ่งหน้า — ปล่อยให้ไหลข้ามหน้า แต่กันไม่ให้การ์ดลูกถูกผ่า */
+  .report-section-flow {
+    break-inside: auto;
+  }
+  .report-section-flow > * > * {
+    break-inside: avoid;
+  }
+
   h1,
   h2,
   h3,

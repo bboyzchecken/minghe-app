@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -227,7 +228,28 @@ func createDemoOrder(db *gorm.DB, spec demoOrder) error {
 	if err := db.Create(order).Error; err != nil {
 		return err
 	}
-	return db.Model(consent).Update("order_id", order.ID).Error
+	if err := db.Model(consent).Update("order_id", order.ID).Error; err != nil {
+		return err
+	}
+
+	// ใบเสร็จตัวอย่างคู่กับคำสั่งซื้อ — หน้า Bill & Payment จะได้ไม่ว่าง
+	payment := &models.Payment{
+		ReceiptNo:     fmt.Sprintf("RCP-%s-%04d", createdAt.Format("200601"), order.ID),
+		OrderID:       order.ID,
+		UserID:        &user.ID,
+		CustomerName:  user.Name,
+		CustomerEmail: user.Email,
+		Product:       order.Product,
+		Description:   "รายงานความสมพงษ์ (" + order.Code + ")",
+		AmountSatang:  order.AmountSatang,
+		Currency:      "THB",
+		Method:        models.PayMethodSeed,
+		ProviderRef:   order.PaymentRef,
+		Status:        models.PaymentPaid,
+		PaidAt:        createdAt,
+		CreatedAt:     createdAt,
+	}
+	return db.Create(payment).Error
 }
 
 // demoPriceSatang ใช้ตารางราคาเดียวกับ priceSatang ใน handler (employer: standard 199 / premium 299 / executive 599 · jobseeker 199 · express +99)

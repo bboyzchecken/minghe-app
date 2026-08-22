@@ -20,13 +20,16 @@ import {
   type AdminOrder,
   type AdminOrderStatus,
   type AdminOverview,
+  type AdminStats,
   type AdminUserRow,
   type AuthResult,
   type CreateOrderDraft,
   type InviteResult,
   type MingheClient,
+  type MeProfile,
   type MockAccount,
   type OrderRecord,
+  type PaymentRecord,
   type OrgInvite,
   type OrgMember,
   type OrgRole,
@@ -42,6 +45,9 @@ import {
   type SavedTeamMember,
   type SessionUser,
   type Side,
+  type StatsBucket,
+  type TrackEventInput,
+  type UserCredit,
 } from './types'
 
 /** รูปแบบ snapshot ที่ฝากไว้ในฟิลด์ input ของคำสั่งซื้อ */
@@ -57,6 +63,128 @@ interface ApiUser {
   name: string
   role: string
   status?: string
+  phone?: string
+  provider?: string
+  created_at?: string
+  last_login_at?: string | null
+}
+
+interface ApiPayment {
+  id: number
+  receipt_no: string
+  order_id: number
+  order_code?: string
+  order_status?: string
+  product: 'employer' | 'jobseeker'
+  description: string
+  customer_name: string
+  customer_email: string
+  amount_satang: number
+  refund_amount_satang: number
+  currency: string
+  method: string
+  provider_ref: string
+  status: string
+  refund_reason: string
+  refunded_by_name: string
+  refunded_at: string | null
+  paid_at: string
+}
+
+interface ApiCredit {
+  id: number
+  user_id: number
+  user_email?: string
+  user_name?: string
+  product: string
+  depth: string
+  note: string
+  granted_by_name: string
+  status: string
+  used_order_id: number | null
+  used_at: string | null
+  expires_at: string | null
+  created_at: string
+}
+
+interface ApiBucket {
+  key: string
+  revenue_employer_satang: number
+  revenue_jobseeker_satang: number
+  refund_satang: number
+  payments_count: number
+  orders_employer: number
+  orders_jobseeker: number
+  signups: number
+  trials_started: number
+  trials_paid: number
+}
+
+function toPayment(p: ApiPayment): PaymentRecord {
+  return {
+    id: String(p.id),
+    receiptNo: p.receipt_no,
+    orderId: String(p.order_id),
+    orderCode: p.order_code ?? '',
+    orderStatus: p.order_status ?? '',
+    product: p.product,
+    description: p.description,
+    customerName: p.customer_name,
+    customerEmail: p.customer_email,
+    amount: Math.round(p.amount_satang / 100),
+    refundAmount: Math.round((p.refund_amount_satang ?? 0) / 100),
+    currency: p.currency || 'THB',
+    method: p.method,
+    providerRef: p.provider_ref,
+    status: p.status === 'refunded' ? 'refunded' : p.status === 'partially_refunded' ? 'partially_refunded' : 'paid',
+    refundReason: p.refund_reason ?? '',
+    refundedBy: p.refunded_by_name ?? '',
+    refundedAt: p.refunded_at,
+    paidAt: p.paid_at,
+  }
+}
+
+function toCredit(c: ApiCredit): UserCredit {
+  return {
+    id: String(c.id),
+    userId: String(c.user_id),
+    userEmail: c.user_email,
+    userName: c.user_name,
+    product: c.product === 'employer' || c.product === 'jobseeker' ? c.product : 'any',
+    depth: c.depth === 'standard' || c.depth === 'premium' || c.depth === 'executive' ? c.depth : '',
+    note: c.note ?? '',
+    grantedBy: c.granted_by_name ?? '',
+    status: c.status === 'used' ? 'used' : c.status === 'revoked' ? 'revoked' : 'available',
+    usedOrderId: c.used_order_id === null ? null : String(c.used_order_id),
+    usedAt: c.used_at,
+    expiresAt: c.expires_at,
+    createdAt: c.created_at,
+  }
+}
+
+function toBucket(b: ApiBucket): StatsBucket {
+  return {
+    key: b.key,
+    revenueEmployer: Math.round(b.revenue_employer_satang / 100),
+    revenueJobseeker: Math.round(b.revenue_jobseeker_satang / 100),
+    refunds: Math.round(b.refund_satang / 100),
+    payments: b.payments_count,
+    ordersEmployer: b.orders_employer,
+    ordersJobseeker: b.orders_jobseeker,
+    signups: b.signups,
+    trialsStarted: b.trials_started,
+    trialsPaid: b.trials_paid,
+  }
+}
+
+function toMeProfile(user: ApiUser, session: SessionUser): MeProfile {
+  return {
+    ...session,
+    phone: user.phone ?? '',
+    provider: user.provider === 'google' ? 'google' : 'email',
+    createdAt: user.created_at ?? '',
+    lastLoginAt: user.last_login_at ?? null,
+  }
 }
 
 interface ApiMember {
@@ -161,6 +289,7 @@ interface ApiOrder {
   assigned_admin_id: number | null
   assigned_admin_name: string
   customer_email?: string
+  payment_method?: string
 }
 
 async function call<T>(
@@ -308,6 +437,7 @@ function toOrderRecord(order: ApiOrder): OrderRecord {
     express: snapshot?.express ?? false,
     createdAt: order.created_at,
     input: report as GenerateReportInput,
+    paymentMethod: order.payment_method,
   }
 }
 
@@ -511,7 +641,13 @@ export const liveClient: MingheClient = {
     const paid = await call<ApiOrder>(`/api/orders/${created.id}/pay`, {
       method: 'POST',
       token,
-      body: { consent_id: consent.id, method: 'pending_gateway', payment_ref: `PRE-${created.code}` },
+      body: {
+        consent_id: consent.id,
+        method: 'pending_gateway',
+        payment_ref: `PRE-${created.code}`,
+        anon_id: draft.anonId ?? '',
+        skip_credit: draft.skipCredit ?? false,
+      },
     })
 
     return toOrderRecord(paid)
@@ -744,6 +880,130 @@ export const liveClient: MingheClient = {
       version: d.version,
       status: d.status === 'published' ? 'published' : 'draft',
     }))
+  },
+
+  /* ── Bill & Payment / สิทธิ์ทดลอง / สถิติ ──────────────── */
+
+  async meProfile(token): Promise<MeProfile> {
+    const user = await call<ApiUser>('/api/me', { token })
+    return toMeProfile(user, await toSessionUser(token, user))
+  },
+
+  async updateMe(token, input): Promise<MeProfile> {
+    const user = await call<ApiUser>('/api/me', { method: 'PATCH', token, body: { name: input.name, phone: input.phone } })
+    return toMeProfile(user, await toSessionUser(token, user))
+  },
+
+  async listMyPayments(token, organizationId): Promise<PaymentRecord[]> {
+    const query = organizationId ? `?organization_id=${organizationId}` : ''
+    const res = await call<{ data: ApiPayment[] | null }>(`/api/me/payments${query}`, { token })
+    return (res.data ?? []).map(toPayment).sort((a, b) => b.paidAt.localeCompare(a.paidAt))
+  },
+
+  async listMyCredits(token): Promise<UserCredit[]> {
+    const res = await call<{ data: ApiCredit[] | null }>('/api/me/credits', { token })
+    return (res.data ?? []).map(toCredit)
+  },
+
+  async trackEvent(input: TrackEventInput, token) {
+    try {
+      await call('/events', {
+        method: 'POST',
+        token: token ?? undefined,
+        body: { anon_id: input.anonId, product: input.product, step: input.step, step_index: input.stepIndex },
+      })
+    } catch {
+      /* สถิติหายหนึ่งจุด ไม่ทำให้ผู้ใช้สะดุด */
+    }
+  },
+
+  async adminStats(token, granularity, range): Promise<AdminStats> {
+    const params = new URLSearchParams({ granularity })
+    if (range?.from) params.set('from', range.from)
+    if (range?.to) params.set('to', range.to)
+    const res = await call<{
+      granularity: string
+      from: string
+      to: string
+      series: ApiBucket[] | null
+      this_month: ApiBucket
+      funnel: { product: 'employer' | 'jobseeker'; step: string; index: number; count: number }[] | null
+      dropoffs:
+        | {
+            anon_id: string
+            user_id: number | null
+            email: string
+            name: string
+            product: 'employer' | 'jobseeker'
+            last_step: string
+            last_step_index: number
+            first_at: string
+            last_seen_at: string
+            has_credit: boolean
+          }[]
+        | null
+    }>(`/admin/stats?${params.toString()}`, { token })
+    return {
+      granularity,
+      from: res.from,
+      to: res.to,
+      series: (res.series ?? []).map(toBucket),
+      thisMonth: toBucket(res.this_month),
+      funnel: (res.funnel ?? []).map((f) => ({ product: f.product, step: f.step, index: f.index, count: f.count })),
+      dropoffs: (res.dropoffs ?? []).map((d) => ({
+        anonId: d.anon_id,
+        userId: d.user_id === null ? null : String(d.user_id),
+        email: d.email ?? '',
+        name: d.name ?? '',
+        product: d.product,
+        lastStep: d.last_step,
+        lastStepIndex: d.last_step_index,
+        firstAt: d.first_at,
+        lastSeenAt: d.last_seen_at,
+        hasCredit: d.has_credit,
+      })),
+    }
+  },
+
+  async adminListPayments(token, filter): Promise<PaymentRecord[]> {
+    const params = new URLSearchParams({ limit: '100' })
+    if (filter?.product) params.set('product', filter.product)
+    if (filter?.status) params.set('status', filter.status)
+    if (filter?.search) params.set('search', filter.search)
+    const res = await call<{ data: ApiPayment[] | null }>(`/admin/payments?${params.toString()}`, { token })
+    return (res.data ?? []).map(toPayment)
+  },
+
+  async adminRefundPayment(token, id, input) {
+    await call(`/admin/payments/${id}/refund`, {
+      method: 'POST',
+      token,
+      body: { amount_satang: Math.round((input.amount ?? 0) * 100), reason: input.reason },
+    })
+  },
+
+  async adminListCredits(token, userId): Promise<UserCredit[]> {
+    const query = userId ? `?user_id=${userId}` : ''
+    const res = await call<{ data: ApiCredit[] | null }>(`/admin/credits${query}`, { token })
+    return (res.data ?? []).map(toCredit)
+  },
+
+  async adminGrantCredit(token, userId, input) {
+    await call(`/admin/users/${userId}/credits`, {
+      method: 'POST',
+      token,
+      body: {
+        product: input.product ?? 'any',
+        depth: input.depth ?? '',
+        note: input.note ?? '',
+        expires_days: input.expiresDays ?? 0,
+        quantity: input.quantity ?? 1,
+      },
+    })
+  },
+
+  async adminRevokeCredit(token, id) {
+    await call(`/admin/credits/${id}`, { method: 'DELETE', token })
   },
 }
 

@@ -21,6 +21,7 @@ import (
 	"github.com/minghe/api/pkg/models"
 	"github.com/minghe/api/pkg/services/email"
 	"github.com/minghe/api/pkg/services/storage"
+	billingstore "github.com/minghe/api/pkg/store/billing"
 	consentstore "github.com/minghe/api/pkg/store/consent"
 	orderstore "github.com/minghe/api/pkg/store/order"
 	organizationstore "github.com/minghe/api/pkg/store/organization"
@@ -62,6 +63,7 @@ func main() {
 			orderstore.New,
 			reportstore.New,
 			consentstore.New,
+			billingstore.New,
 			email.New,
 			storage.New,
 			api.NewServer,
@@ -269,6 +271,16 @@ func runMigrations(db *gorm.DB) error {
 					return err
 				}
 				return tx.Migrator().DropColumn(&models.Order{}, "assigned_admin_name")
+			},
+		},
+		{
+			// Bill & Payment (ใบเสร็จ + คืนเงิน), สิทธิ์ทดลองจากแอดมิน, และ funnel event สำหรับสถิติ
+			ID: "20260822_billing_credits_events",
+			Migrate: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&models.Payment{}, &models.UserCredit{}, &models.FunnelEvent{})
+			},
+			Rollback: func(tx *gorm.DB) error {
+				return tx.Migrator().DropTable("funnel_events", "user_credits", "payments")
 			},
 		},
 	})

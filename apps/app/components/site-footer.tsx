@@ -1,12 +1,18 @@
+'use client'
+
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { isWorkspacePath } from './workspace/shell'
 import { ELEMENT_ORDER } from '@/lib/brand'
 import { ElementIcon } from './element-icon'
 import { Logo } from './logo'
 import { SELLER } from '@/lib/legal'
 
 export function SiteFooter() {
+  const pathname = usePathname()
+  if (isWorkspacePath(pathname)) return null
   return (
-    <footer className="mt-24 border-t border-line bg-paper-warm/60">
+    <footer className="no-print mt-24 border-t border-line bg-paper-warm/60">
       <div className="container-page py-12">
         <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
           <div className="max-w-sm">

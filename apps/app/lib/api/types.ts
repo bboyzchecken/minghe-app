@@ -68,6 +68,8 @@ export interface OrderRecord {
   /** snapshot ของสิ่งที่กรอก — ใช้ประกอบรายงานฝั่ง client */
   input: GenerateReportInput
   pin?: string
+  /** credit = ใช้สิทธิ์ทดลองที่แอดมินให้ (ยอด 0) */
+  paymentMethod?: string
 }
 
 export interface CreateOrderDraft {
@@ -80,6 +82,10 @@ export interface CreateOrderDraft {
   orgMode?: 'executive' | 'company-date' | 'industry'
   /** องค์กรที่โปรไฟล์ผู้ถูกวิเคราะห์จะถูกเก็บไว้ให้ (F-25) — มีเฉพาะฝั่ง employer */
   organizationId?: string
+  /** anon id ของ funnel — ให้ API ปิดสถิติว่าคนนี้จ่ายแล้ว */
+  anonId?: string
+  /** true = ไม่หักสิทธิ์ทดลองแม้จะมี */
+  skipCredit?: boolean
 }
 
 export interface AuthResult {
@@ -159,6 +165,134 @@ export interface AdminOverview {
   usersActive: number
   legalPublished: number
   legalTotal: number
+}
+
+/* ── Bill & Payment / สิทธิ์ทดลอง / สถิติ ────────────────── */
+
+export type PaymentStatus = 'paid' | 'refunded' | 'partially_refunded'
+
+/** หนึ่งใบเสร็จ — ผู้ใช้ดูย้อนหลังได้ แอดมินใช้ติดตาม/คืนเงิน */
+export interface PaymentRecord {
+  id: string
+  receiptNo: string
+  orderId: string
+  orderCode: string
+  orderStatus: string
+  product: 'employer' | 'jobseeker'
+  description: string
+  customerName: string
+  customerEmail: string
+  /** บาท */
+  amount: number
+  refundAmount: number
+  currency: string
+  method: string
+  providerRef: string
+  status: PaymentStatus
+  refundReason: string
+  refundedBy: string
+  refundedAt: string | null
+  paidAt: string
+}
+
+export type CreditStatus = 'available' | 'used' | 'revoked'
+
+/** สิทธิ์ใช้ฟรี 1 ครั้งที่แอดมินมอบให้ (ลูกค้าทักไลน์ / ขอลองใช้) */
+export interface UserCredit {
+  id: string
+  userId: string
+  userEmail?: string
+  userName?: string
+  product: 'any' | 'employer' | 'jobseeker'
+  depth: '' | 'standard' | 'premium' | 'executive'
+  note: string
+  grantedBy: string
+  status: CreditStatus
+  usedOrderId: string | null
+  usedAt: string | null
+  expiresAt: string | null
+  createdAt: string
+}
+
+export interface GrantCreditInput {
+  product?: 'any' | 'employer' | 'jobseeker'
+  depth?: 'standard' | 'premium' | 'executive'
+  note?: string
+  expiresDays?: number
+  quantity?: number
+}
+
+export interface RefundInput {
+  /** บาท — 0/ไม่ส่ง = คืนเต็มจำนวน */
+  amount?: number
+  reason: string
+}
+
+export type StatsGranularity = 'day' | 'month' | 'year'
+
+/** หนึ่งช่องเวลาในกราฟย้อนหลัง — ตัวเลขเงินเป็นบาท */
+export interface StatsBucket {
+  key: string
+  revenueEmployer: number
+  revenueJobseeker: number
+  refunds: number
+  payments: number
+  ordersEmployer: number
+  ordersJobseeker: number
+  signups: number
+  trialsStarted: number
+  trialsPaid: number
+}
+
+export interface FunnelStep {
+  product: 'employer' | 'jobseeker'
+  step: string
+  index: number
+  count: number
+}
+
+/** คนที่เริ่มลองเล่นแล้วไม่จ่าย — พร้อมขั้นสุดท้ายที่ไปถึง */
+export interface DropoffUser {
+  anonId: string
+  userId: string | null
+  email: string
+  name: string
+  product: 'employer' | 'jobseeker'
+  lastStep: string
+  lastStepIndex: number
+  firstAt: string
+  lastSeenAt: string
+  hasCredit: boolean
+}
+
+export interface AdminStats {
+  granularity: StatsGranularity
+  from: string
+  to: string
+  series: StatsBucket[]
+  thisMonth: StatsBucket
+  funnel: FunnelStep[]
+  dropoffs: DropoffUser[]
+}
+
+export interface TrackEventInput {
+  anonId: string
+  product: 'employer' | 'jobseeker'
+  step: string
+  stepIndex: number
+}
+
+export interface UpdateMeInput {
+  name?: string
+  phone?: string
+}
+
+/** ข้อมูลโปรไฟล์เต็มของบัญชีที่ล็อกอิน (หน้า Profile) */
+export interface MeProfile extends SessionUser {
+  phone: string
+  provider: 'email' | 'google'
+  createdAt: string
+  lastLoginAt: string | null
 }
 
 /* ── สถานที่เกิดจากลิงก์ Google Maps (F-08) ─────────────── */
@@ -322,4 +456,18 @@ export interface MingheClient {
   adminListUsers(token: string): Promise<AdminUserRow[]>
   adminSetUserStatus(token: string, id: string, status: 'active' | 'deactivated'): Promise<void>
   adminListLegal(token: string): Promise<AdminLegalDoc[]>
+
+  /* Bill & Payment / สิทธิ์ทดลอง / สถิติ */
+  meProfile(token: string): Promise<MeProfile>
+  updateMe(token: string, input: UpdateMeInput): Promise<MeProfile>
+  listMyPayments(token: string, organizationId?: string): Promise<PaymentRecord[]>
+  listMyCredits(token: string): Promise<UserCredit[]>
+  /** ส่งจุดที่ผู้ใช้เดินถึงใน wizard — ไม่ throw เด็ดขาด (สถิติห้ามทำให้โฟลว์พัง) */
+  trackEvent(input: TrackEventInput, token?: string | null): Promise<void>
+  adminStats(token: string, granularity: StatsGranularity, range?: { from?: string; to?: string }): Promise<AdminStats>
+  adminListPayments(token: string, filter?: { product?: string; status?: string; search?: string }): Promise<PaymentRecord[]>
+  adminRefundPayment(token: string, id: string, input: RefundInput): Promise<void>
+  adminListCredits(token: string, userId?: string): Promise<UserCredit[]>
+  adminGrantCredit(token: string, userId: string, input: GrantCreditInput): Promise<void>
+  adminRevokeCredit(token: string, id: string): Promise<void>
 }

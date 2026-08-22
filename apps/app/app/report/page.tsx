@@ -64,7 +64,7 @@ export default function ReportPage() {
       </div>
 
       {error && (
-        <div className="container-page mb-6">
+        <div className="no-print container-page mb-6">
           <p className="mx-auto max-w-3xl rounded-lg border border-terracotta/40 bg-terracotta/[0.07] px-4 py-3 text-sm text-terracotta">
             ประกอบรายงานจากข้อมูลที่บันทึกไว้ไม่สำเร็จ ({error}) — แสดงรายงานตัวอย่างแทน
           </p>
@@ -72,7 +72,7 @@ export default function ReportPage() {
       )}
 
       {order && (
-        <div className="container-page mb-6">
+        <div className="no-print container-page mb-6">
           <div className="mx-auto flex max-w-3xl flex-col gap-3 rounded-xl border border-jade/40 bg-jade/[0.07] p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-jade text-cloud">

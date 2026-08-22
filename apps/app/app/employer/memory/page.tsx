@@ -18,7 +18,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { isoToDisplay } from '@/components/date-input'
 import { ElementIcon } from '@/components/element-icon'
-import { RequireLogin } from '@/components/require-login'
+import { WorkspaceShell, employerNav } from '@/components/workspace/shell'
 import type { ProfileKind, SavedProfile } from '@/lib/api'
 import { profileKindLabel } from '@/lib/place'
 import {
@@ -34,9 +34,9 @@ import { useSession } from '@/lib/session'
 
 export default function MemoryPage() {
   return (
-    <RequireLogin path="/employer/memory">
+    <WorkspaceShell nav={employerNav} brand="บัญชีองค์กร" requirePath="/employer/memory">
       <Memory />
-    </RequireLogin>
+    </WorkspaceShell>
   )
 }
 
@@ -56,7 +56,7 @@ function Memory() {
   const shown = kind === 'all' ? profiles : profiles.filter((p) => p.kind === kind)
 
   return (
-    <div className="container-page py-10 md:py-14">
+    <div>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <span className="eyebrow">Employer · คลังข้อมูล</span>

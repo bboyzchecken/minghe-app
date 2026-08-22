@@ -17,6 +17,7 @@ import {
   PILLAR_TH,
   type BaziChart,
   type BirthInput,
+  type CompatibilityFactor,
   type CompatibilityResult,
   type Pillar,
   type WuXingAnalysis,
@@ -25,6 +26,7 @@ import type {
   ChartView,
   CompatibilityView,
   GenerateReportInput,
+  PairHighlight,
   PillarView,
   ReportData,
   SubjectInput,
@@ -168,6 +170,34 @@ export interface AssembledReport {
   subjectChart: BaziChart
 }
 
+/**
+ * คัดปัจจัยที่มีน้ำหนักมากที่สุดของฝั่งบวกหรือฝั่งลบออกมาหนึ่งข้อ (F-20 ข้อ 2)
+ *
+ * factors ถูกเรียงตามขนาดของน้ำหนักมาแล้วจาก comparePersons จึงหยิบตัวแรกที่ตรงฝั่งได้เลย
+ * ค่า titleTh อยู่ในรูปแบบไทย + วงเล็บศัพท์เดิมอยู่แล้ว เช่น "กิ่งดินชงกัน (六沖)" ตรงตาม F-23.2
+ */
+function topHighlight(factors: CompatibilityFactor[], positive: boolean): PairHighlight | null {
+  const found = factors.find((f) => f.isPositive === positive)
+  return found ? { titleTh: found.titleTh, explanation: found.explanation } : null
+}
+
+/**
+ * ประโยคสรุปรายคู่ — ตอบคำถามที่ UAT ถามตรง ๆ ว่า "เข้ากับใครดีสุด / ต้องระวังกับใคร"
+ * รับ pairs ที่เรียงจากมากไปน้อยแล้ว
+ */
+function pairSummaryOf(pairs: TeamPairView[], subjectName: string): string {
+  if (pairs.length === 0) return ''
+  const best = pairs[0]
+  const worst = pairs[pairs.length - 1]
+  if (pairs.length === 1) {
+    return `${subjectName}กับคุณ${best.name} ได้ ${best.score}/100 (${best.gradeTh})`
+  }
+  return (
+    `ในทีม ${pairs.length} คน ${subjectName}เข้ากันได้ดีที่สุดกับคุณ${best.name} (${best.score}/100) ` +
+    `และต้องบริหารความต่างกับคุณ${worst.name}มากที่สุด (${worst.score}/100)`
+  )
+}
+
 /** ประกอบส่วนคำนวณทั้งหมดของรายงาน (ยังไม่รวม narrative/โหงวเฮ้ง) */
 export function assembleReport(input: GenerateReportInput): AssembledReport {
   const subject: SubjectInput = input.subject
@@ -252,18 +282,29 @@ export function assembleReport(input: GenerateReportInput): AssembledReport {
     const { overall, pairwise } = compareTeam(subjectChart, memberCharts, {
       nameA: subject.name,
     })
+
+    // F-20 — เรียงจากเข้ากันดีที่สุดไปน้อยที่สุด ตั้งแต่ชั้นข้อมูล
+    // เพื่อให้ทั้งหน้าเว็บ รายงาน PDF และ narrative เห็นลำดับเดียวกัน ไม่ต้องเรียงซ้ำคนละที่
+    const pairViews = pairwise
+      .map(
+        (p): TeamPairView => ({
+          name: p.name,
+          score: p.result.score,
+          grade: p.result.grade,
+          gradeTh: p.result.gradeTh,
+          strength: topHighlight(p.result.factors, true),
+          watchOut: topHighlight(p.result.factors, false),
+          topFactors: p.result.factors.slice(0, 3),
+        }),
+      )
+      .sort((a, b) => b.score - a.score)
+
     team = {
       overallScore: overall.score,
       overallGradeTh: overall.gradeTh,
       summary: overall.summary,
-      pairwise: pairwise.map(
-        (p): TeamPairView => ({
-          name: p.name,
-          score: p.result.score,
-          gradeTh: p.result.gradeTh,
-          topFactors: p.result.factors.slice(0, 3),
-        }),
-      ),
+      pairSummary: pairSummaryOf(pairViews, subject.name),
+      pairwise: pairViews,
     }
   }
 

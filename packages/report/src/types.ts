@@ -78,10 +78,28 @@ export interface CompatibilityView {
   mode: 'person' | 'company-date' | 'industry' | 'team'
 }
 
+/** ปัจจัยหนึ่งข้อในรูปแบบที่พร้อมแสดงผล — ป้ายเป็นไทยพร้อมวงเล็บศัพท์เดิม (F-23.2) */
+export interface PairHighlight {
+  titleTh: string
+  explanation: string
+}
+
+/**
+ * ความสัมพันธ์ระหว่างผู้ถูกวิเคราะห์กับสมาชิกทีมหนึ่งคน (F-20)
+ *
+ * ตอบโจทย์ "what's in it" — ไม่ใช่แค่บอกคะแนน แต่บอกว่าเข้ากันเพราะอะไรและต้องระวังอะไร
+ * `strength` / `watchOut` ถูกคัดมาจากปัจจัยที่มีน้ำหนักมากที่สุดของแต่ละฝั่งแล้ว
+ * หน้าจอจึงไม่ต้องรู้กติกาการคัดเลือกเอง
+ */
 export interface TeamPairView {
   name: string
   score: number
+  grade: CompatibilityGrade
   gradeTh: string
+  /** จุดที่ส่งเสริมกันมากที่สุด — null เมื่อไม่พบปัจจัยบวกที่มีนัยสำคัญ */
+  strength: PairHighlight | null
+  /** จุดที่ต้องบริหารมากที่สุด — null เมื่อไม่พบปัจจัยลบที่มีนัยสำคัญ */
+  watchOut: PairHighlight | null
   topFactors: CompatibilityFactor[]
 }
 
@@ -121,6 +139,9 @@ export interface ReportData {
     overallScore: number
     overallGradeTh: string
     summary: string
+    /** ประโยคเดียวตอบว่า "เข้ากับใครดีสุด / ต้องระวังกับใคร" (F-20 ข้อ 1) */
+    pairSummary: string
+    /** เรียงจากคะแนนมากไปน้อยแล้ว — หน้าจอไม่ต้องเรียงซ้ำ */
     pairwise: TeamPairView[]
   }
   annual: AnnualOutlook
