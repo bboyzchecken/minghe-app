@@ -3,12 +3,15 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
 	"github.com/minghe/api/pkg/handlers/api/request"
+	"github.com/minghe/api/pkg/logger"
 	"github.com/minghe/api/pkg/models"
 	"github.com/minghe/api/pkg/utils/dateutil"
+	"github.com/minghe/api/pkg/utils/str"
 )
 
 /* ── องค์กร (F-05) ──────────────────────────────────────── */
@@ -135,6 +138,8 @@ type addMemberBody struct {
 	Role  string `json:"role" validate:"required,oneof=owner hr viewer"`
 }
 
+const inviteTTL = 14 * 24 * time.Hour
+
 func (s *Server) ListOrganizationMembers(c echo.Context) error {
 	org, err := s.loadOrganization(c, "id")
 	if err != nil {
@@ -148,6 +153,12 @@ func (s *Server) ListOrganizationMembers(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"data": members})
 }
 
+// AddOrganizationMember เชิญคนเข้าองค์กรด้วยอีเมล (F-05)
+//
+// สองทางออกในคำขอเดียว เพราะฝั่งผู้ใช้คิดว่ามันคือการ "เชิญ" อย่างเดียว:
+//   - อีเมลนั้นมีบัญชีแล้ว  → เป็นสมาชิกทันที ตอบ 201 พร้อม member
+//   - อีเมลนั้นยังไม่มีบัญชี → ค้างเป็นคำเชิญ ตอบ 202 พร้อม invite
+//     แล้วผูกให้อัตโนมัติตอนเขาสมัคร/เข้าระบบครั้งแรก (claimPendingInvites)
 func (s *Server) AddOrganizationMember(c echo.Context) error {
 	org, err := s.loadOrganization(c, "id")
 	if err != nil {
@@ -165,21 +176,140 @@ func (s *Server) AddOrganizationMember(c echo.Context) error {
 		return c.JSON(http.StatusUnprocessableEntity, err)
 	}
 
-	user, findErr := s.UserStore.FindByEmail(body.Email)
-	if findErr != nil {
-		return c.JSON(http.StatusNotFound, request.Err("ยังไม่มีผู้ใช้ที่ใช้อีเมลนี้ — ให้สมัครสมาชิกก่อน"))
+	email := str.NormalizeEmail(body.Email)
+	inviterName := "เจ้าของบัญชีองค์กร"
+	if inviter, findErr := s.UserStore.Find(int(CurrentUserID(c))); findErr == nil && inviter.Name != "" {
+		inviterName = inviter.Name
 	}
 
-	member := &models.OrganizationMember{
-		OrganizationID: org.ID,
-		UserID:         user.ID,
-		Role:           body.Role,
-		Status:         models.StatusActive,
+	user, findErr := s.UserStore.FindByEmail(email)
+	if findErr == nil {
+		if existing, memberErr := s.OrganizationStore.FindMember(org.ID, user.ID); memberErr == nil {
+			// เชิญคนที่เป็นสมาชิกอยู่แล้ว = เปลี่ยนบทบาทให้ ไม่ใช่ error ที่ต้องไปลบก่อนแล้วเชิญใหม่
+			existing.Role = body.Role
+			existing.Status = models.StatusActive
+			if updateErr := s.OrganizationStore.UpdateMember(existing); updateErr != nil {
+				return c.JSON(http.StatusInternalServerError, request.Err("cannot update member"))
+			}
+			existing.User = user
+			return c.JSON(http.StatusOK, existing)
+		}
+
+		member := &models.OrganizationMember{
+			OrganizationID: org.ID,
+			UserID:         user.ID,
+			Role:           body.Role,
+			Status:         models.StatusActive,
+		}
+		if addErr := s.OrganizationStore.AddMember(member); addErr != nil {
+			return c.JSON(http.StatusInternalServerError, request.Err("cannot add member"))
+		}
+		member.User = user
+		s.notifyInvite(email, org.Name, inviterName, true)
+		return c.JSON(http.StatusCreated, member)
 	}
-	if err := s.OrganizationStore.AddMember(member); err != nil {
-		return c.JSON(http.StatusConflict, request.Err("ผู้ใช้นี้เป็นสมาชิกอยู่แล้ว"))
+
+	invite := &models.OrganizationInvite{
+		OrganizationID:  org.ID,
+		Email:           email,
+		Role:            body.Role,
+		InvitedByUserID: CurrentUserID(c),
+		InvitedByName:   inviterName,
+		Status:          models.InviteStatusPending,
+		ExpiresAt:       time.Now().Add(inviteTTL),
 	}
-	return c.JSON(http.StatusCreated, member)
+	if createErr := s.OrganizationStore.CreateInvite(invite); createErr != nil {
+		return c.JSON(http.StatusInternalServerError, request.Err("cannot create invite"))
+	}
+	s.notifyInvite(email, org.Name, inviterName, false)
+	return c.JSON(http.StatusAccepted, invite)
+}
+
+/* ── คำเชิญที่ยังค้างอยู่ ────────────────────────────────── */
+
+func (s *Server) ListOrganizationInvites(c echo.Context) error {
+	org, err := s.loadOrganization(c, "id")
+	if err != nil {
+		return err
+	}
+	invites, listErr := s.OrganizationStore.ListInvites(org.ID, models.InviteStatusPending)
+	if listErr != nil {
+		return c.JSON(http.StatusInternalServerError, request.Err("cannot list invites"))
+	}
+	return c.JSON(http.StatusOK, map[string]any{"data": invites})
+}
+
+func (s *Server) RevokeOrganizationInvite(c echo.Context) error {
+	org, err := s.loadOrganization(c, "id")
+	if err != nil {
+		return err
+	}
+	if !s.hasOrganizationRole(c, org.ID, models.OrgRoleOwner) {
+		return c.JSON(http.StatusForbidden, request.Err("เฉพาะเจ้าของบัญชีองค์กรเท่านั้นที่ยกเลิกคำเชิญได้"))
+	}
+
+	inviteID, convErr := strconv.Atoi(c.Param("inviteId"))
+	if convErr != nil {
+		return c.JSON(http.StatusBadRequest, request.Err("invalid invite id"))
+	}
+	invite, findErr := s.OrganizationStore.FindInvite(inviteID)
+	if findErr != nil || invite.OrganizationID != org.ID {
+		return c.JSON(http.StatusNotFound, request.Err("ไม่พบคำเชิญนี้"))
+	}
+
+	invite.Status = models.InviteStatusRevoked
+	if updateErr := s.OrganizationStore.UpdateInvite(invite); updateErr != nil {
+		return c.JSON(http.StatusInternalServerError, request.Err("cannot revoke invite"))
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// claimPendingInvites ผูกคำเชิญที่ค้างอยู่ของอีเมลนี้เข้ากับบัญชี
+//
+// เรียกทุกครั้งที่ผู้ใช้เข้าระบบ (สมัคร / ล็อกอิน / Google) เพราะคำเชิญอาจถูกส่ง
+// หลังจากเขามีบัญชีแล้วก็ได้ — ทำตรงนี้จึงไม่ต้องมีหน้า "กดรับคำเชิญ" แยกต่างหาก
+func (s *Server) claimPendingInvites(user *models.User) {
+	invites, err := s.OrganizationStore.ListPendingInvitesByEmail(user.Email)
+	if err != nil || len(invites) == 0 {
+		return
+	}
+
+	now := time.Now()
+	for _, invite := range invites {
+		if invite.Expired(now) {
+			continue
+		}
+		if _, memberErr := s.OrganizationStore.FindMember(invite.OrganizationID, user.ID); memberErr != nil {
+			addErr := s.OrganizationStore.AddMember(&models.OrganizationMember{
+				OrganizationID: invite.OrganizationID,
+				UserID:         user.ID,
+				Role:           invite.Role,
+				Status:         models.StatusActive,
+			})
+			if addErr != nil {
+				logger.Warn("cannot accept invite ", invite.ID, ": ", addErr)
+				continue
+			}
+		}
+		invite.Status = models.InviteStatusAccepted
+		invite.AcceptedAt = &now
+		if updateErr := s.OrganizationStore.UpdateInvite(invite); updateErr != nil {
+			logger.Warn("cannot mark invite accepted: ", updateErr)
+		}
+	}
+}
+
+// notifyInvite แจ้งอีเมลผู้ถูกเชิญ — ส่งไม่ได้ก็ไม่ควรทำให้คำขอล้ม
+// (ตอนยังไม่ได้ตั้งค่า Gmail API ตัว service จะ log ข้อความแทนการส่งจริง)
+func (s *Server) notifyInvite(email, orgName, inviterName string, alreadyRegistered bool) {
+	action := "สมัครสมาชิกด้วยอีเมลนี้ แล้วระบบจะพาเข้าองค์กรให้อัตโนมัติ"
+	if alreadyRegistered {
+		action = "เข้าสู่ระบบด้วยอีเมลนี้ได้เลย"
+	}
+	body := "<p>" + inviterName + " เชิญคุณเข้าร่วม <b>" + orgName + "</b> บน Mìnghé</p><p>" + action + "</p>"
+	if err := s.Email.Send(email, "คำเชิญเข้าร่วม "+orgName+" บน Mìnghé", body); err != nil {
+		logger.Warn("cannot send invite email: ", err)
+	}
 }
 
 func (s *Server) RemoveOrganizationMember(c echo.Context) error {

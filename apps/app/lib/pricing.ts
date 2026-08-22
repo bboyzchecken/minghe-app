@@ -3,8 +3,24 @@
  * อ้างอิง handoff: Employer 699/เดือน (6 candidate/สัปดาห์), JobSeeker 399/เดือน (3/สัปดาห์) หรือ 199/ครั้ง
  *
  * ⚠️ Open item (จาก handoff §10): "Executive Analysis +89" (add-on) vs "Executive Insights +399"
- * (over-quota tier) ยังต้องเคลียร์ว่าเป็นฟีเจอร์เดียวกันไหม — หน้าเว็บแสดงทั้งคู่ตามเอกสาร
+ * (over-quota tier) ยังต้องเคลียร์ว่าเป็นฟีเจอร์เดียวกันไหม
+ * — หน้าเว็บยังแสดงทั้งคู่ตามเอกสาร แต่แยกหมวดให้ชัด (ระดับรายงาน vs บริการเสริม)
+ * และไม่โชว์หมายเหตุ "รอสรุป" ให้ลูกค้าเห็นแล้ว
+ *
+ * ⚠️ หน้าราคาถูกแยกเป็นสองหน้าตามกลุ่มผู้ใช้ (/pricing/employer, /pricing/jobseeker)
+ * ข้อมูลในไฟล์นี้จึงติดป้าย `audience` ไว้ เพื่อไม่ให้ราคาฝั่งหนึ่งไปโผล่อีกฝั่ง
  */
+
+/** กลุ่มผู้ใช้ที่ราคาแต่ละรายการใช้ได้ */
+export type Audience = 'employer' | 'jobseeker'
+
+/* ---- ตัวเลขหลัก (ใช้ร่วมกันทั้งหน้าเว็บและ flow ชำระเงิน) ---- */
+export const EMPLOYER_PLAN_PRICE = 699
+export const EMPLOYER_WEEKLY_QUOTA = 6
+export const JOBSEEKER_PLAN_PRICE = 399
+export const JOBSEEKER_WEEKLY_QUOTA = 3
+/** จ่ายรายครั้งฝั่งคนทำงาน = ราคารายงาน Standard 1 ฉบับ (เท่ากับ DEPTH_TIERS.standard) */
+export const JOBSEEKER_PAY_PER_VIEW_PRICE = 199
 
 export interface DepthTier {
   id: 'standard' | 'premium' | 'executive'
@@ -49,6 +65,8 @@ export interface Addon {
   description: string
   turnaround?: string
   comingSoon?: boolean
+  /** เปิดขายให้ใครบ้าง — ตอนนี้ flow สั่งซื้อบริการเสริมมีเฉพาะฝั่งองค์กร */
+  audience: Audience[]
 }
 
 export const ADDONS: Addon[] = [
@@ -59,6 +77,7 @@ export const ADDONS: Addon[] = [
     price: 99,
     description: 'ได้รับผลภายใน 3 ชั่วโมง (ปกติ 24 ชั่วโมง)',
     turnaround: '3 ชม.',
+    audience: ['employer'],
   },
   {
     id: 'executive-analysis',
@@ -67,6 +86,7 @@ export const ADDONS: Addon[] = [
     price: 89,
     description: 'วิเคราะห์เจาะจงบทบาทผู้บริหาร/หัวหน้าทีมเพิ่มเติม',
     turnaround: '24 ชม.',
+    audience: ['employer'],
   },
   {
     id: 'consult',
@@ -74,6 +94,7 @@ export const ADDONS: Addon[] = [
     cn: '面谈',
     price: 1500,
     description: 'วิดีโอคอลกับซินแสตัวจริง 45 นาที อธิบายรายงาน + ถาม-ตอบ',
+    audience: ['employer'],
   },
   {
     id: 'physiognomy',
@@ -82,8 +103,14 @@ export const ADDONS: Addon[] = [
     price: null,
     description: 'อ่านโหงวเฮ้งจากภาพถ่ายประกอบผังปาจือ',
     comingSoon: true,
+    audience: ['employer', 'jobseeker'],
   },
 ]
+
+/** บริการเสริมที่กลุ่มผู้ใช้นั้นซื้อได้จริงในเฟสนี้ */
+export function addonsFor(audience: Audience): Addon[] {
+  return ADDONS.filter((a) => a.audience.includes(audience))
+}
 
 export interface SpeedOption {
   id: 'standard' | 'express'
@@ -122,11 +149,11 @@ export const PLANS: Record<'employer' | 'jobseeker', Plan> = {
   employer: {
     id: 'employer',
     name: 'Employer · องค์กร',
-    price: 699,
+    price: EMPLOYER_PLAN_PRICE,
     period: '/เดือน',
-    quota: 'วิเคราะห์ได้ 6 candidate ต่อสัปดาห์',
+    quota: `วิเคราะห์ได้ ${EMPLOYER_WEEKLY_QUOTA} candidate ต่อสัปดาห์`,
     features: [
-      'โควตา 6 candidate/สัปดาห์ (รีเซ็ตทุกจันทร์)',
+      `โควตา ${EMPLOYER_WEEKLY_QUOTA} candidate/สัปดาห์ (รีเซ็ตทุกจันทร์)`,
       'Team Roster — จำรายชื่อทีม วิเคราะห์รวมทั้งทีม',
       'Profile Memory — จำโปรไฟล์บริษัท+ผู้บริหาร auto-fill',
       'Cross-Data — ผู้บริหาร × วันก่อตั้ง × ธาตุอุตสาหกรรม',
@@ -137,16 +164,16 @@ export const PLANS: Record<'employer' | 'jobseeker', Plan> = {
   jobseeker: {
     id: 'jobseeker',
     name: 'Job Seeker · คนทำงาน',
-    price: 399,
+    price: JOBSEEKER_PLAN_PRICE,
     period: '/เดือน',
-    quota: 'เช็กบริษัทได้ 3 แห่งต่อสัปดาห์',
+    quota: `เช็กบริษัทได้ ${JOBSEEKER_WEEKLY_QUOTA} แห่งต่อสัปดาห์`,
     features: [
-      'โควตา 3 บริษัท/สัปดาห์',
+      `โควตา ${JOBSEEKER_WEEKLY_QUOTA} บริษัท/สัปดาห์`,
       'เช็กความสมพงษ์ก่อนสมัคร/ตอบรับงาน',
       'กรอกข้อมูลบริษัทเอง (เชื่อม DBD ในเฟสถัดไป)',
       'เก็บประวัติบริษัทที่เคยเช็ก',
     ],
-    overQuota: ['หรือจ่ายรายครั้ง 199 บาท / 1 บริษัท (Pay-per-view)'],
+    overQuota: [`หรือจ่ายรายครั้ง ${JOBSEEKER_PAY_PER_VIEW_PRICE} บาท / 1 บริษัท (Pay-per-view)`],
   },
 }
 

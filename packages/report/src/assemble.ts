@@ -52,6 +52,8 @@ export function toBirthInput(subject: {
   birthTime: string
   province?: string
   longitude?: number
+  /** เขตเวลาสถานที่เกิด — ไม่ระบุถือว่าไทย (UTC+7) ตามผู้ใช้ส่วนใหญ่ของระบบ (F-08 ข้อ 2) */
+  tzOffsetHours?: number
   lateZiRule?: 'same-day' | 'next-day'
   gender?: 'male' | 'female'
   name?: string
@@ -64,7 +66,7 @@ export function toBirthInput(subject: {
     day,
     hour,
     minute,
-    tzOffsetHours: 7,
+    tzOffsetHours: subject.tzOffsetHours ?? 7,
     province: subject.province,
     longitude: subject.longitude,
     lateZiRule: subject.lateZiRule,
@@ -185,6 +187,8 @@ export function assembleReport(input: GenerateReportInput): AssembledReport {
         birthDate: org.birthDate,
         birthTime: org.birthTime,
         province: org.province,
+        longitude: org.longitude,
+        tzOffsetHours: org.tzOffsetHours,
         name: orgLabel,
       }),
     )
@@ -192,7 +196,8 @@ export function assembleReport(input: GenerateReportInput): AssembledReport {
       name: orgLabel,
       birthDate: org.birthDate,
       birthTime: org.birthTime,
-      province: org.province,
+      // ชื่อสถานที่จากลิงก์ Google Maps อ่านเข้าใจกว่าชื่อจังหวัด จึงแสดงตัวนั้นก่อนถ้ามี (F-08)
+      province: org.placeLabel || org.province,
     })
     compat = comparePersons(subjectChart, execChart, {
       nameA: subject.name,
@@ -238,6 +243,8 @@ export function assembleReport(input: GenerateReportInput): AssembledReport {
           birthDate: m.birthDate,
           birthTime: m.birthTime ?? '12:00',
           province: m.province,
+          longitude: m.longitude,
+          tzOffsetHours: m.tzOffsetHours,
           name: m.name,
         }),
       ),
@@ -277,7 +284,7 @@ export function assembleReport(input: GenerateReportInput): AssembledReport {
         name: subject.name,
         birthDate: subject.birthDate,
         birthTime: subject.birthTime,
-        province: subject.province,
+        province: subject.placeLabel || subject.province,
       }),
       wuxing: wuxingView(subjectWu),
     },

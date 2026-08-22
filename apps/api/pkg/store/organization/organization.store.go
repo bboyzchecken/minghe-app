@@ -76,15 +76,66 @@ func (s *organizationStoreService) FindMember(orgID, userID uint) (*models.Organ
 	return &member, nil
 }
 
+// ListMembers preload User มาด้วย เพราะหน้าจัดการสมาชิกต้องแสดงชื่อกับอีเมล (F-05)
 func (s *organizationStoreService) ListMembers(orgID uint) ([]*models.OrganizationMember, error) {
 	var members []*models.OrganizationMember
-	err := s.db.Where("organization_id = ?", orgID).Order("id ASC").Find(&members).Error
+	err := s.db.Preload("User").Where("organization_id = ?", orgID).Order("id ASC").Find(&members).Error
 	return members, err
+}
+
+func (s *organizationStoreService) UpdateMember(member *models.OrganizationMember) error {
+	return s.db.Save(member).Error
 }
 
 func (s *organizationStoreService) RemoveMember(orgID, userID uint) error {
 	return s.db.Where("organization_id = ? AND user_id = ?", orgID, userID).
 		Delete(&models.OrganizationMember{}).Error
+}
+
+/* ── คำเชิญเข้าองค์กร (F-05) ────────────────────────────── */
+
+// CreateInvite เขียนทับคำเชิญเดิมของอีเมลเดียวกันในองค์กรเดียวกัน
+// (เชิญซ้ำ = เปลี่ยนบทบาท/ต่ออายุ ไม่ใช่ error ที่ผู้ใช้ต้องมานั่งลบเอง)
+func (s *organizationStoreService) CreateInvite(invite *models.OrganizationInvite) error {
+	var existing models.OrganizationInvite
+	err := s.db.Where("organization_id = ? AND email = ?", invite.OrganizationID, invite.Email).
+		First(&existing).Error
+	if err == nil {
+		invite.ID = existing.ID
+		invite.CreatedAt = existing.CreatedAt
+		return s.db.Save(invite).Error
+	}
+	return s.db.Create(invite).Error
+}
+
+func (s *organizationStoreService) FindInvite(id int) (*models.OrganizationInvite, error) {
+	var invite models.OrganizationInvite
+	if err := s.db.First(&invite, id).Error; err != nil {
+		return nil, err
+	}
+	return &invite, nil
+}
+
+func (s *organizationStoreService) ListInvites(orgID uint, status string) ([]*models.OrganizationInvite, error) {
+	var invites []*models.OrganizationInvite
+	q := s.db.Where("organization_id = ?", orgID)
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	err := q.Order("id DESC").Find(&invites).Error
+	return invites, err
+}
+
+func (s *organizationStoreService) ListPendingInvitesByEmail(email string) ([]*models.OrganizationInvite, error) {
+	var invites []*models.OrganizationInvite
+	err := s.db.Preload("Organization").
+		Where("email = ? AND status = ?", email, models.InviteStatusPending).
+		Order("id ASC").Find(&invites).Error
+	return invites, err
+}
+
+func (s *organizationStoreService) UpdateInvite(invite *models.OrganizationInvite) error {
+	return s.db.Save(invite).Error
 }
 
 /* ── ทีม ────────────────────────────────────────────────── */

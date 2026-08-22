@@ -1,63 +1,27 @@
 'use client'
 
-import { THAI_PROVINCES } from '@minghe/core'
+import { BirthPlaceField } from './birth-place-field'
 import { DateInput } from './date-input'
+import { Field, Select, TextInput } from './fields'
 
-export function Field({
-  label,
-  hint,
-  children,
-  className = '',
-}: {
-  label?: string
-  hint?: string
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <label className={`block ${className}`}>
-      {label && <span className="field-label">{label}</span>}
-      {children}
-      {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
-    </label>
-  )
-}
-
-export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`field ${props.className ?? ''}`} />
-}
-
-export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={`field ${props.className ?? ''}`} />
-}
-
-const PROVINCES = [...THAI_PROVINCES].sort((a, b) => a.name.localeCompare(b.name, 'th'))
-
-export function ProvinceSelect({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (v: string) => void
-}) {
-  return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">— เลือกจังหวัดเกิด —</option>
-      {PROVINCES.map((p) => (
-        <option key={p.name} value={p.name}>
-          {p.name}
-        </option>
-      ))}
-    </Select>
-  )
-}
+// หน้าจอเดิมนำเข้าชิ้นส่วนพื้นฐานจากไฟล์นี้อยู่ — ส่งต่อให้เหมือนเดิมจะได้ไม่ต้องแก้ทุกหน้า
+export { Field, Select, TextInput, ProvinceSelect } from './fields'
 
 export interface BirthValue {
   name: string
   gender: 'male' | 'female' | ''
   birthDate: string
   birthTime: string
+  /** จังหวัดเกิด — ทางสำรองเมื่อยังไม่มีพิกัดจากลิงก์ Google Maps (F-08 ข้อ 1) */
   province: string
+  /** ลิงก์ Google Maps ที่ผู้ใช้วางไว้ เก็บไว้ให้ตรวจย้อนได้ว่าพิกัดมาจากไหน */
+  placeUrl: string
+  /** ชื่อสถานที่ที่แกะได้จากลิงก์ */
+  placeLabel: string
+  lat?: number
+  lng?: number
+  /** เขตเวลาที่ผู้ใช้ยืนยัน — ไม่มีค่า = ไทย (UTC+7) */
+  tzOffsetHours?: number
 }
 
 export const emptyBirth: BirthValue = {
@@ -66,6 +30,8 @@ export const emptyBirth: BirthValue = {
   birthDate: '',
   birthTime: '',
   province: '',
+  placeUrl: '',
+  placeLabel: '',
 }
 
 export function BirthFields({
@@ -108,9 +74,8 @@ export function BirthFields({
       <Field label="เวลาเกิด" hint="ยิ่งแม่นยิ่งดี — เสาเวลาเป็นหัวใจของความแม่น">
         <TextInput type="time" value={value.birthTime} onChange={(e) => set({ birthTime: e.target.value })} />
       </Field>
-      <Field label="จังหวัดเกิด" hint="ใช้ปรับเวลาสุริยะจริง (真太陽時)" className="sm:col-span-2">
-        <ProvinceSelect value={value.province} onChange={(v) => set({ province: v })} />
-      </Field>
+      {/* F-08 — ลิงก์ Google Maps เป็นทางหลัก จังหวัดเป็นทางสำรองอยู่ในตัว component */}
+      <BirthPlaceField value={value} onChange={set} className="sm:col-span-2" />
     </div>
   )
 }

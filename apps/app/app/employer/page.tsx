@@ -63,6 +63,10 @@ export default function EmployerIntro() {
           </div>
           <div className="mt-6 text-sm text-ink-soft">
             สมาชิก <b className="text-ink">699 บาท/เดือน</b> · โควตา 6 candidate/สัปดาห์ · เกินโควตาจ่ายรายหัว 199/299/399
+            {' '}
+            <Link href="/pricing/employer" className="whitespace-nowrap text-gold hover:underline">
+              ดูราคาฝั่งองค์กรทั้งหมด →
+            </Link>
           </div>
         </div>
         <div className="relative">

@@ -20,16 +20,32 @@ import {
   type AdminUserRow,
   type AuthResult,
   type CreateOrderDraft,
+  type InviteResult,
   type MingheClient,
   type MockAccount,
   type OrderRecord,
+  type OrgInvite,
+  type OrgMember,
+  type OrgRole,
   type OtpChallenge,
+  type ProfileKind,
   type RegisterInput,
   type ResetPasswordInput,
+  type ResolvedPlace,
+  type RuntimeConfig,
+  type SaveProfileInput,
+  type SavedProfile,
+  type SavedTeam,
+  type SavedTeamMember,
   type SessionUser,
 } from './types'
 
 const ORDERS_KEY = 'minghe:mock:orders'
+const MEMBERS_KEY = 'minghe:mock:orgMembers'
+const INVITES_KEY = 'minghe:mock:orgInvites'
+const PROFILES_KEY = 'minghe:mock:profiles'
+const TEAMS_KEY = 'minghe:mock:teams'
+const TEAM_MEMBERS_KEY = 'minghe:mock:teamMembers'
 const ACCOUNTS_KEY = 'minghe:mock:accounts'
 const PASSWORDS_KEY = 'minghe:mock:passwords'
 const OTP_PREFIX = 'minghe:mock:otp:'
@@ -232,6 +248,8 @@ function toSessionUser(account: ResolvedAccount): SessionUser {
     role: account.side === 'admin' ? 'admin' : 'user',
     side: account.side,
     orgRole: account.orgRole,
+    // โหมด mock ไม่มี id องค์กรจริง — ใช้ค่าคงที่เป็นกุญแจให้ hooks ฝั่งหน้าเว็บใช้เหมือนกันทั้งสองโหมด
+    organizationId: account.side === 'employer' ? 'mock-org' : undefined,
     organizationName: account.organizationName,
   }
 }
@@ -374,11 +392,224 @@ function mockUsers(): AdminUserRow[] {
   return base.map((u) => ({ ...u, status: overrides[u.email] ?? u.status }))
 }
 
+/* ── แกะลิงก์ Google Maps ฝั่งเบราว์เซอร์ (F-08) ───────────
+ * ใช้รูปแบบเดียวกับตัวแกะใน Go (apps/api/pkg/utils/geo) เพื่อให้ผลตรงกันทั้งสองโหมด
+ */
+
+const AT_PATTERN = /@(-?\d+\.\d+),(-?\d+\.\d+)/
+const DATA_PATTERN = /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/
+const COORD_PATTERN = /^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/
+const PLACE_PATTERN = /\/maps\/place\/([^/@]+)/
+
+const MAPS_HOSTS = [
+  'maps.app.goo.gl',
+  'goo.gl',
+  'maps.google.com',
+  'www.google.com',
+  'google.com',
+  'www.google.co.th',
+  'google.co.th',
+]
+
+function isShortMapsLink(raw: string): boolean {
+  try {
+    return ['maps.app.goo.gl', 'goo.gl'].includes(new URL(raw.trim()).host.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
+function extractPlaceFromUrl(raw: string): ResolvedPlace | null {
+  let parsed: URL
+  try {
+    parsed = new URL(raw.trim())
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== 'https:' || !MAPS_HOSTS.includes(parsed.host.toLowerCase())) return null
+
+  const full = parsed.toString()
+  const match =
+    DATA_PATTERN.exec(full) ??
+    AT_PATTERN.exec(full) ??
+    ['q', 'll', 'center', 'daddr']
+      .map((key) => COORD_PATTERN.exec((parsed.searchParams.get(key) ?? '').trim()))
+      .find(Boolean)
+  if (!match) return null
+
+  const lat = Number(match[1])
+  const lng = Number(match[2])
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+
+  const labelMatch = PLACE_PATTERN.exec(parsed.pathname)
+  const label = labelMatch ? decodeURIComponent(labelMatch[1]).replace(/\+/g, ' ') : ''
+
+  // เดาเขตเวลาแบบเดียวกับฝั่ง Go แต่ย่อเหลือกรณีที่พบบ่อย — หน้าเว็บให้ผู้ใช้ยืนยันอยู่แล้ว
+  const inThailand = lat >= 5.5 && lat <= 20.5 && lng >= 97.3 && lng <= 105.7
+  return {
+    lat,
+    lng,
+    label,
+    timezoneOffsetHours: inThailand ? 7 : Math.round(lng / 15),
+    timezoneRegion: inThailand ? 'ไทย' : undefined,
+    timezoneApproximate: !inThailand,
+  }
+}
+
+/* ── คลังข้อมูลจำลอง: สมาชิกองค์กร / โปรไฟล์ / ทีม ────────
+ * ทุกอย่างผูกกับ "อีเมลเจ้าของบัญชี" เพราะโหมด mock ไม่มี id องค์กรจริง
+ * หน้าเว็บส่ง orgId อะไรมาก็ได้ ที่นี่ใช้เจ้าของเซสชันเป็นขอบเขตแทน
+ */
+
+interface StoredMember {
+  userId: string
+  name: string
+  email: string
+  role: OrgRole
+}
+
+interface StoredInvite {
+  id: string
+  email: string
+  role: OrgRole
+  invitedByName: string
+  createdAt: string
+  expiresAt: string
+}
+
+interface StoredTeam {
+  id: string
+  name: string
+  note: string
+}
+
+interface StoredTeamMember {
+  teamId: string
+  profileId: string
+  position: string
+  isLead: boolean
+}
+
+/** ขอบเขตของข้อมูลองค์กรในโหมด mock = องค์กรของบัญชีที่ล็อกอินอยู่ */
+function orgScope(token: string): ResolvedAccount {
+  const account = accountByEmail(emailFromToken(token))
+  if (account.side !== 'employer') {
+    throw new ClientError('บัญชีนี้ไม่ได้อยู่ในองค์กร', 403)
+  }
+  return account
+}
+
+/**
+ * ขอบเขตของข้อมูลในโหมด mock
+ *
+ * บัญชีทดลอง**ฝั่งองค์กร**ทั้งหมด (เจ้าของ + HR) ถือว่าอยู่องค์กรเดียวกัน จึงใช้คีย์ร่วมกัน —
+ * จะได้เห็นทีมและโปรไฟล์ชุดเดียวกันเหมือนอยู่บริษัทเดียวกันจริง
+ *
+ * ที่เหลือแยกตามอีเมล — สำคัญกับฝั่งคนทำงานเป็นพิเศษ เพราะบทบาทนั้นระบุไว้ว่า
+ * "เห็นข้อมูลขององค์กรใด ๆ ไม่ได้" ถ้าใช้คีย์ร่วมจะเห็นโปรไฟล์พนักงานของบริษัททันที
+ */
+function scopeKey(account: ResolvedAccount): string {
+  const sharesDemoOrg =
+    account.side === 'employer' && MOCK_ACCOUNTS.some((a) => a.email === account.email)
+  return sharesDemoOrg ? DEMO_ORG_NAME : account.email
+}
+
+function readScoped<T>(key: string, account: ResolvedAccount, seed: () => T[]): T[] {
+  const book = readJSON<Record<string, T[]>>(key, {})
+  const scope = scopeKey(account)
+  if (!book[scope]) {
+    book[scope] = seed()
+    writeJSON(key, book)
+  }
+  return book[scope]
+}
+
+function writeScoped<T>(key: string, account: ResolvedAccount, rows: T[]) {
+  const book = readJSON<Record<string, T[]>>(key, {})
+  book[scopeKey(account)] = rows
+  writeJSON(key, book)
+}
+
+function seedMembers(): StoredMember[] {
+  return MOCK_ACCOUNTS.filter((a) => a.side === 'employer').map((a) => ({
+    userId: a.email,
+    name: a.name,
+    email: a.email,
+    role: (a.orgRole ?? 'viewer') as OrgRole,
+  }))
+}
+
+/** โปรไฟล์ตัวอย่างในคลัง — ให้หน้า memory ไม่ว่างเปล่าตั้งแต่เข้าครั้งแรก */
+function seedProfiles(): SavedProfile[] {
+  const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString()
+  return [
+    {
+      id: 'p-exec-1',
+      kind: 'executive',
+      name: 'คุณบัส (เจ้าของบริษัท)',
+      gender: 'male',
+      birthDate: '1978-11-04',
+      birthTime: '07:20',
+      province: 'กรุงเทพมหานคร',
+      placeLabel: '',
+      placeUrl: '',
+      createdAt: ago(40),
+    },
+    {
+      id: 'p-emp-1',
+      kind: 'employee',
+      name: 'ธนกร (หัวหน้าคลังสินค้า)',
+      gender: 'male',
+      birthDate: '1994-03-19',
+      birthTime: '11:05',
+      province: 'ชลบุรี',
+      placeLabel: '',
+      placeUrl: '',
+      createdAt: ago(30),
+    },
+    {
+      id: 'p-emp-2',
+      kind: 'employee',
+      name: 'ปาริชาต (ฝ่ายจัดซื้อ)',
+      gender: 'female',
+      birthDate: '1993-12-02',
+      birthTime: '17:40',
+      province: 'กรุงเทพมหานคร',
+      placeLabel: '',
+      placeUrl: '',
+      createdAt: ago(28),
+    },
+  ]
+}
+
+function seedTeams(): StoredTeam[] {
+  return [{ id: 't-ops', name: 'ทีมปฏิบัติการคลังสินค้า', note: 'ทีมที่รับ candidate ใหม่บ่อยที่สุด' }]
+}
+
+function seedTeamMembers(): StoredTeamMember[] {
+  return [
+    { teamId: 't-ops', profileId: 'p-emp-1', position: 'หัวหน้าทีม', isLead: true },
+    { teamId: 't-ops', profileId: 'p-emp-2', position: 'ฝ่ายจัดซื้อ', isLead: false },
+  ]
+}
+
+function nextId(prefix: string): string {
+  return prefix + '-' + Math.random().toString(36).slice(2, 9)
+}
+
 export const mockClient: MingheClient = {
   mode: 'mock',
 
-  async mockAccounts() {
-    return MOCK_ACCOUNTS
+  async runtimeConfig(): Promise<RuntimeConfig> {
+    return {
+      mode: 'mock',
+      // โหมด mock ไม่มี server ไว้ตรวจ ID token กับ Google — ปุ่มจึงเปิดเป็น "บัญชี Google สาธิต" แทน
+      // โฟลว์ที่ผู้ใช้เห็นเหมือนของจริงทุกขั้น ต่างแค่ตัวยืนยันตัวตน
+      googleLoginEnabled: true,
+      googleClientId: undefined,
+      googleLoginNote: 'โหมดสาธิต — เลือกบัญชี Google จำลองได้โดยไม่ต้องมี OAuth client',
+      mockAccounts: MOCK_ACCOUNTS,
+    }
   },
 
   async login(email, password) {
@@ -393,8 +624,57 @@ export const mockClient: MingheClient = {
     return { token: TOKEN_PREFIX + account.email, user: toSessionUser(account) }
   },
 
-  async loginWithGoogle(): Promise<AuthResult> {
-    throw new ClientError('การเข้าสู่ระบบด้วย Google ยังไม่เปิดใช้งาน', 501)
+  /**
+   * โหมดสาธิตของ Google login (F-02)
+   *
+   * หน้าเว็บส่ง `mock-google:<อีเมล>` มาแทน ID token จริง
+   * ผลลัพธ์ที่ผู้ใช้เห็นเหมือนโหมด live: ได้ session ทันทีโดยไม่ต้องกรอกรหัสผ่าน
+   * และถ้าอีเมลนั้นยังไม่มีบัญชี ระบบจะสร้างให้เป็นบัญชีคนทำงาน เหมือน Go ทำฝั่ง live
+   */
+  async loginWithGoogle(idToken: string): Promise<AuthResult> {
+    const prefix = 'mock-google:'
+    if (!idToken.startsWith(prefix)) {
+      throw new ClientError('โหมดสาธิตรับได้เฉพาะบัญชี Google จำลอง', 501)
+    }
+    const email = idToken.slice(prefix.length).trim().toLowerCase()
+
+    let account = findAccount(email)
+    if (!account) {
+      const created: RegisteredAccount = {
+        email,
+        // บัญชีที่มาจาก Google ไม่มีรหัสผ่าน — ใส่ค่าที่ล็อกอินด้วยฟอร์มไม่ผ่าน
+        password: '\u0000google',
+        name: email.split('@')[0],
+        side: 'jobseeker',
+        createdAt: new Date().toISOString(),
+      }
+      writeJSON(ACCOUNTS_KEY, [...registeredAccounts(), created])
+      account = accountByEmail(email)
+    }
+    if (readUserStatus()[account.email] === 'deactivated') {
+      throw new ClientError('บัญชีนี้ถูกระงับการใช้งาน', 403)
+    }
+    return { token: TOKEN_PREFIX + account.email, user: toSessionUser(account) }
+  },
+
+  /**
+   * แกะลิงก์ Google Maps ในเบราว์เซอร์ (F-08)
+   *
+   * ข้อจำกัดที่ยอมรับไว้: ลิงก์ย่อ (maps.app.goo.gl) แกะในโหมด mock ไม่ได้จริง ๆ
+   * เพราะต้องยิงตาม redirect ซึ่งเบราว์เซอร์ติด CORS — เป็นเหตุผลเดียวกับที่ฟีเจอร์นี้ต้องมี Go API
+   * กรณีนั้นจะบอกผู้ใช้ตรง ๆ แล้วให้ใช้ทางสำรอง (จังหวัดเกิด) ตามที่ตัดสินไว้ใน F-08 ข้อ 1
+   */
+  async resolvePlace(url): Promise<ResolvedPlace> {
+    const place = extractPlaceFromUrl(url)
+    if (!place) {
+      throw new ClientError(
+        isShortMapsLink(url)
+          ? 'โหมดสาธิตแกะลิงก์ย่อ (maps.app.goo.gl) ไม่ได้ — เปิดลิงก์ในเบราว์เซอร์แล้วคัดลอกลิงก์เต็มจากแถบที่อยู่ หรือเลือกจังหวัดเกิดแทน'
+          : 'แกะพิกัดจากลิงก์นี้ไม่ได้ — กรุณาคัดลอกลิงก์จากปุ่ม แชร์ ใน Google Maps อีกครั้ง',
+        422,
+      )
+    }
+    return place
   },
 
   async me(token) {
@@ -471,6 +751,35 @@ export const mockClient: MingheClient = {
     const book = readOrders()
     book[email] = [order, ...ordersFor(email)]
     writeJSON(ORDERS_KEY, book)
+
+    // โหมด live เก็บโปรไฟล์ผู้ถูกวิเคราะห์ไว้ตอนสั่งซื้อ (F-25) — ที่นี่ต้องเหมือนกัน
+    // ฝั่งคนทำงานก็เก็บด้วย (kind=self) จะได้ไม่ต้องกรอกวันเกิดตัวเองใหม่ทุกครั้งที่เช็กบริษัท
+    const account = findAccount(email)
+    if (account && account.side !== 'admin') {
+      const subject = draft.input.subject
+      const profiles = readScoped(PROFILES_KEY, account, () =>
+        account.side === 'employer' ? seedProfiles() : [],
+      )
+      writeScoped(PROFILES_KEY, account, [
+        {
+          id: nextId('p'),
+          kind: draft.product === 'jobseeker' ? 'self' : 'candidate',
+          name: subject.name,
+          gender: subject.gender ?? '',
+          birthDate: subject.birthDate,
+          birthTime: subject.birthTime ?? '',
+          province: subject.province ?? '',
+          placeLabel: subject.placeLabel ?? '',
+          placeUrl: subject.placeUrl ?? '',
+          lat: subject.latitude,
+          lng: subject.longitude,
+          timezoneOffsetHours: subject.tzOffsetHours,
+          createdAt: order.createdAt,
+        },
+        ...profiles,
+      ])
+    }
+
     return order
   },
 
@@ -486,6 +795,183 @@ export const mockClient: MingheClient = {
       throw new ClientError('PIN ไม่ถูกต้อง', 401)
     }
     return found
+  },
+
+  /* ── องค์กรและสมาชิก (F-05) ─────────────────────────────── */
+
+  async listOrgMembers(token): Promise<OrgMember[]> {
+    const me = orgScope(token)
+    return readScoped(MEMBERS_KEY, me, seedMembers).map((m) => ({
+      userId: m.userId,
+      name: m.name,
+      email: m.email,
+      role: m.role,
+      status: readUserStatus()[m.email] === 'deactivated' ? 'deactivated' : 'active',
+      isMe: m.email === me.email,
+    }))
+  },
+
+  async listOrgInvites(token): Promise<OrgInvite[]> {
+    const me = orgScope(token)
+    return readScoped<StoredInvite>(INVITES_KEY, me, () => [])
+  },
+
+  async inviteOrgMember(token, _orgId, email, role): Promise<InviteResult> {
+    const me = orgScope(token)
+    if (me.orgRole !== 'owner') {
+      throw new ClientError('เฉพาะเจ้าของบัญชีองค์กรเท่านั้นที่เพิ่มสมาชิกได้', 403)
+    }
+
+    const normalized = email.trim().toLowerCase()
+    const members = readScoped(MEMBERS_KEY, me, seedMembers)
+    const existing = members.find((m) => m.email === normalized)
+    if (existing) {
+      existing.role = role
+      writeScoped(MEMBERS_KEY, me, members)
+      return { outcome: 'role-updated', email: normalized, role }
+    }
+
+    // มีบัญชีอยู่แล้ว → เข้าเป็นสมาชิกทันที · ยังไม่มีบัญชี → ค้างเป็นคำเชิญ (เหมือนฝั่ง API)
+    const account = findAccount(normalized)
+    if (account) {
+      writeScoped(MEMBERS_KEY, me, [
+        ...members,
+        { userId: account.email, name: account.name, email: account.email, role },
+      ])
+      return { outcome: 'member-added', email: normalized, role }
+    }
+
+    const invites = readScoped<StoredInvite>(INVITES_KEY, me, () => [])
+    const kept = invites.filter((i) => i.email !== normalized)
+    writeScoped<StoredInvite>(INVITES_KEY, me, [
+      ...kept,
+      {
+        id: nextId('inv'),
+        email: normalized,
+        role,
+        invitedByName: me.name,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 14 * 86_400_000).toISOString(),
+      },
+    ])
+    return { outcome: 'invite-sent', email: normalized, role }
+  },
+
+  async removeOrgMember(token, _orgId, userId) {
+    const me = orgScope(token)
+    if (me.orgRole !== 'owner') throw new ClientError('เฉพาะเจ้าของบัญชีองค์กรเท่านั้น', 403)
+    const members = readScoped(MEMBERS_KEY, me, seedMembers)
+    const target = members.find((m) => m.userId === userId)
+    if (target?.role === 'owner') throw new ClientError('ลบเจ้าของบัญชีองค์กรออกไม่ได้', 409)
+    writeScoped(MEMBERS_KEY, me, members.filter((m) => m.userId !== userId))
+  },
+
+  async revokeOrgInvite(token, _orgId, inviteId) {
+    const me = orgScope(token)
+    if (me.orgRole !== 'owner') throw new ClientError('เฉพาะเจ้าของบัญชีองค์กรเท่านั้น', 403)
+    const invites = readScoped<StoredInvite>(INVITES_KEY, me, () => [])
+    writeScoped<StoredInvite>(INVITES_KEY, me, invites.filter((i) => i.id !== inviteId))
+  },
+
+  /* ── ระบบ memory (F-25) ─────────────────────────────────── */
+
+  async listProfiles(token, opts): Promise<SavedProfile[]> {
+    const account = accountByEmail(emailFromToken(token))
+    const rows = readScoped(PROFILES_KEY, account, () =>
+      account.side === 'employer' ? seedProfiles() : [],
+    )
+    const filtered = opts?.kind ? rows.filter((p) => p.kind === opts.kind) : rows
+    return [...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  },
+
+  async saveProfile(token, input: SaveProfileInput): Promise<SavedProfile> {
+    const account = accountByEmail(emailFromToken(token))
+    const rows = readScoped(PROFILES_KEY, account, () =>
+      account.side === 'employer' ? seedProfiles() : [],
+    )
+    const kind: ProfileKind = input.kind
+    const profile: SavedProfile = {
+      id: nextId('p'),
+      kind,
+      name: input.name,
+      gender: input.gender ?? '',
+      birthDate: input.birthDate,
+      birthTime: input.birthTime ?? '',
+      province: input.province ?? '',
+      placeLabel: input.placeLabel ?? '',
+      placeUrl: input.placeUrl ?? '',
+      lat: input.lat,
+      lng: input.lng,
+      timezoneOffsetHours: input.timezoneOffsetHours,
+      createdAt: new Date().toISOString(),
+    }
+    writeScoped(PROFILES_KEY, account, [profile, ...rows])
+    return profile
+  },
+
+  async deleteProfile(token, id) {
+    const account = accountByEmail(emailFromToken(token))
+    const rows = readScoped(PROFILES_KEY, account, () =>
+      account.side === 'employer' ? seedProfiles() : [],
+    )
+    writeScoped(PROFILES_KEY, account, rows.filter((p) => p.id !== id))
+
+    // ลบโปรไฟล์แล้วต้องหลุดจากทุกทีมด้วย ไม่งั้นทีมจะอ้างคนที่ไม่มีอยู่แล้ว
+    const links = readScoped<StoredTeamMember>(TEAM_MEMBERS_KEY, account, seedTeamMembers)
+    writeScoped<StoredTeamMember>(TEAM_MEMBERS_KEY, account, links.filter((l) => l.profileId !== id))
+  },
+
+  async listTeams(token): Promise<SavedTeam[]> {
+    const me = orgScope(token)
+    const links = readScoped<StoredTeamMember>(TEAM_MEMBERS_KEY, me, seedTeamMembers)
+    return readScoped<StoredTeam>(TEAMS_KEY, me, seedTeams).map((t) => ({
+      ...t,
+      memberCount: links.filter((l) => l.teamId === t.id).length,
+    }))
+  },
+
+  async createTeam(token, _orgId, name, note): Promise<SavedTeam> {
+    const me = orgScope(token)
+    const teams = readScoped<StoredTeam>(TEAMS_KEY, me, seedTeams)
+    const team: StoredTeam = { id: nextId('t'), name, note: note ?? '' }
+    writeScoped<StoredTeam>(TEAMS_KEY, me, [...teams, team])
+    return { ...team, memberCount: 0 }
+  },
+
+  async listTeamMembers(token, teamId): Promise<SavedTeamMember[]> {
+    const me = orgScope(token)
+    const profiles = readScoped(PROFILES_KEY, me, seedProfiles)
+    return readScoped<StoredTeamMember>(TEAM_MEMBERS_KEY, me, seedTeamMembers)
+      .filter((l) => l.teamId === teamId)
+      .map((l) => ({
+        profileId: l.profileId,
+        position: l.position,
+        isLead: l.isLead,
+        profile: profiles.find((p) => p.id === l.profileId),
+      }))
+      .filter((m): m is SavedTeamMember => Boolean(m.profile))
+  },
+
+  async addTeamMember(token, teamId, profileId, position) {
+    const me = orgScope(token)
+    const links = readScoped<StoredTeamMember>(TEAM_MEMBERS_KEY, me, seedTeamMembers)
+    if (links.some((l) => l.teamId === teamId && l.profileId === profileId)) {
+      throw new ClientError('โปรไฟล์นี้อยู่ในทีมแล้ว', 409)
+    }
+    writeScoped<StoredTeamMember>(TEAM_MEMBERS_KEY, me, [
+      ...links,
+      { teamId, profileId, position: position ?? '', isLead: false },
+    ])
+  },
+
+  async removeTeamMember(token, teamId, profileId) {
+    const me = orgScope(token)
+    const links = readScoped<StoredTeamMember>(TEAM_MEMBERS_KEY, me, seedTeamMembers)
+    writeScoped<StoredTeamMember>(
+      TEAM_MEMBERS_KEY,
+      me,
+      links.filter((l) => !(l.teamId === teamId && l.profileId === profileId)),
+    )
   },
 
   /* ── Admin Console ──────────────────────────────────────── */

@@ -246,6 +246,19 @@ func runMigrations(db *gorm.DB) error {
 			},
 		},
 		{
+			// คำเชิญเข้าองค์กร (F-05) + เขตเวลาสถานที่เกิดที่ผู้ใช้ยืนยันแล้ว (F-08)
+			ID: "20260822_org_invites_and_birth_timezone",
+			Migrate: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&models.OrganizationInvite{}, &models.Profile{})
+			},
+			Rollback: func(tx *gorm.DB) error {
+				if err := tx.Migrator().DropTable("organization_invites"); err != nil {
+					return err
+				}
+				return tx.Migrator().DropColumn(&models.Profile{}, "birth_timezone_offset_hours")
+			},
+		},
+		{
 			// เพิ่มช่อง "ผู้รับเรื่อง" ให้คำสั่งซื้อ — รองรับแอดมินหลายคนทำงานพร้อมกัน
 			ID: "20260822_order_assignee",
 			Migrate: func(tx *gorm.DB) error {

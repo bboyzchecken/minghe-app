@@ -1,132 +1,142 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { ElementIcon } from '@/components/element-icon'
-import { ADDONS, DEPTH_TIERS, PLANS, TEAM_EXTRA_SEAT_PRICE, TEAM_FREE_SEATS, thb } from '@/lib/pricing'
+import { Check, Faq, PaymentNote } from '@/components/pricing/bits'
+import {
+  EMPLOYER_PLAN_PRICE,
+  EMPLOYER_WEEKLY_QUOTA,
+  JOBSEEKER_PAY_PER_VIEW_PRICE,
+  JOBSEEKER_PLAN_PRICE,
+  JOBSEEKER_WEEKLY_QUOTA,
+  thb,
+} from '@/lib/pricing'
 
-export const metadata: Metadata = { title: 'ราคา' }
+export const metadata: Metadata = {
+  title: 'ราคา',
+  description:
+    'ราคา 命合 Mìnghé — เลือกดูราคาฝั่งองค์กร (699 บาท/เดือน) หรือฝั่งคนทำงาน (เริ่ม 199 บาท/ครั้ง) แยกกันชัดเจน',
+}
 
-export default function PricingPage() {
+/**
+ * หน้าราคา = ประตูสองบาน
+ *
+ * เดิมหน้านี้วางราคาองค์กรกับคนทำงานไว้ด้วยกัน + ตารางความลึก/บริการเสริมที่ใช้ได้ไม่เท่ากัน
+ * ผู้ใช้ UAT อ่านแล้วเอาตัวเลขข้ามฝั่งกัน (เช่น 199 ของ pay-per-view กับ 199 ของรายงาน Standard)
+ * ตอนนี้จึงให้เลือกก่อนว่าเป็นใคร แล้วเห็นเฉพาะราคาของฝั่งตัวเอง
+ */
+const DOORS = [
+  {
+    href: '/pricing/employer',
+    el: 'metal' as const,
+    tint: '#BE8A2E',
+    eyebrow: 'For Employers',
+    title: 'ฉันเป็นองค์กร / HR',
+    lead: 'มองหา candidate ที่เข้ากับผู้บริหาร ทีม และวัฒนธรรมองค์กร',
+    price: `${thb(EMPLOYER_PLAN_PRICE)} ฿`,
+    unit: '/เดือน',
+    hint: `รวมโควตา ${EMPLOYER_WEEKLY_QUOTA} candidate ต่อสัปดาห์`,
+    points: ['Team Roster วิเคราะห์ทั้งทีม', 'Profile Memory auto-fill', 'บริการเสริม: ผลด่วน · ปรึกษาซินแส'],
+    cta: 'ดูราคาสำหรับองค์กร',
+  },
+  {
+    href: '/pricing/jobseeker',
+    el: 'water' as const,
+    tint: '#5E9BB5',
+    eyebrow: 'For Job Seekers',
+    title: 'ฉันเป็นคนทำงาน',
+    lead: 'เช็กว่าบริษัทที่กำลังสมัคร/ได้ offer สมพงษ์กับดวงเราไหม',
+    price: `${thb(JOBSEEKER_PAY_PER_VIEW_PRICE)} ฿`,
+    unit: '/บริษัท',
+    hint: `หรือรายเดือน ${thb(JOBSEEKER_PLAN_PRICE)} ฿ · เช็กได้ ${JOBSEEKER_WEEKLY_QUOTA} บริษัท/สัปดาห์`,
+    points: ['จ่ายครั้งเดียวก็ใช้ได้ ไม่ต้องสมัครสมาชิก', 'เก็บประวัติบริษัทที่เคยเช็ก', 'ไม่มีค่าใช้จ่ายแอบแฝง'],
+    cta: 'ดูราคาสำหรับคนทำงาน',
+  },
+]
+
+const SHARED_FAQ = [
+  {
+    q: 'ทำไมต้องแยกราคาสองหน้า?',
+    a: 'เพราะสองฝั่งซื้อคนละอย่างกัน — องค์กรซื้อ "จำนวน candidate ที่วิเคราะห์ได้ต่อสัปดาห์" ส่วนคนทำงานซื้อ "รายงานบริษัทเป็นฉบับ" การเอามารวมหน้าเดียวทำให้ตัวเลขที่บังเอิญเท่ากันดูเหมือนเป็นเรื่องเดียวกัน ทั้งที่คนละเงื่อนไข',
+  },
+  {
+    q: 'สมัครฝั่งไหนแล้วข้ามไปใช้อีกฝั่งได้ไหม?',
+    a: 'บัญชีหนึ่งใช้ได้ทีละบทบาท — สมาชิกองค์กรจะเห็นเมนูฝั่งองค์กร ส่วนบัญชีคนทำงานจะเห็นฝั่งคนทำงาน ถ้าต้องการทั้งสองบทบาท ติดต่อทีมงานเพื่อเปิดให้',
+  },
+  {
+    q: 'รายงานที่ได้ต่างกันไหมระหว่างสองฝั่ง?',
+    a: 'แกนการคำนวณเดียวกัน (ผังปาจือ + ห้าธาตุ + ดัชนีสมพงษ์) แต่มุมของรายงานต่างกัน — ฝั่งองค์กรอ่านว่า "คนนี้เข้ากับทีมและผู้บริหารแค่ไหน" ฝั่งคนทำงานอ่านว่า "ที่นี่ส่งเสริมดวงเราแค่ไหน"',
+  },
+  {
+    q: 'ชำระเงินยังไง และขอใบเสร็จ/ใบกำกับภาษีได้ไหม?',
+    a: 'ชำระผ่าน GB Prime Pay รองรับบัตรเครดิต/เดบิต และ QR PromptPay (อยู่ระหว่างเชื่อมต่อ) · ต้องการเอกสารในนามนิติบุคคล แจ้งได้ที่ info@minghe.work',
+  },
+]
+
+export default function PricingHub() {
   return (
     <div className="container-page py-14 md:py-20">
       <div className="mx-auto max-w-2xl text-center">
         <span className="eyebrow">ราคาแพ็กเกจ</span>
         <h1 className="mt-3 text-4xl">โปร่งใส · จ่ายเท่าที่ใช้</h1>
-        <p className="mt-3 text-ink-soft">
-          สมาชิกรายเดือนเป็นหลัก + ซื้อเพิ่มเมื่อเกินโควตา — เลือกได้ทั้งฝั่งองค์กรและฝั่งคนทำงาน
+        <p className="mt-3 text-balance text-ink-soft">
+          ราคาฝั่งองค์กรกับฝั่งคนทำงานคิดคนละแบบ — เลือกว่าคุณคือใคร แล้วดูเฉพาะราคาของคุณ
+          ไม่ต้องอ่านปนกัน
         </p>
       </div>
 
-      {/* plans */}
       <div className="mx-auto mt-12 grid max-w-4xl gap-6 md:grid-cols-2">
-        {(['employer', 'jobseeker'] as const).map((key) => {
-          const p = PLANS[key]
-          const el = key === 'employer' ? 'metal' : 'water'
-          return (
-            <div
-              key={key}
-              className={`relative flex flex-col rounded-xl border bg-card p-8 shadow-card ${
-                p.highlight ? 'border-gold' : 'border-line'
-              }`}
-            >
-              {p.highlight && (
-                <span className="absolute -top-3 left-8 rounded-full bg-gold px-3 py-1 text-xs font-medium text-cloud">
-                  แนะนำสำหรับองค์กร
-                </span>
-              )}
-              <div className="flex items-center gap-2">
-                <ElementIcon element={el} size={22} />
-                <span className="text-sm font-medium text-ink-soft">{p.name}</span>
-              </div>
-              <div className="mt-4 flex items-baseline gap-1">
-                <span className="font-display-en text-5xl font-semibold text-ink">{thb(p.price)}</span>
-                <span className="text-lg text-muted">฿ {p.period}</span>
-              </div>
-              <div className="mt-1 text-sm text-gold">{p.quota}</div>
-              <ul className="mt-5 flex-1 space-y-2.5">
-                {p.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-ink-soft">
-                    <Check /> {f}
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-5 rounded-lg bg-paper-warm/60 p-3 text-xs text-ink-soft">
-                {p.overQuota.map((o) => (
-                  <div key={o}>{o}</div>
-                ))}
-              </div>
-              <Link href={key === 'employer' ? '/employer/new' : '/jobseeker/new'} className="btn-primary mt-6">
-                เริ่มใช้งาน
-              </Link>
+        {DOORS.map((d) => (
+          <Link
+            key={d.href}
+            href={d.href}
+            className="group relative flex flex-col rounded-xl border border-line bg-card p-8 shadow-card transition duration-200 hover:-translate-y-1 hover:shadow-lift"
+            style={{ borderTopColor: d.tint, borderTopWidth: 3 }}
+          >
+            <div className="flex items-center gap-2">
+              <ElementIcon element={d.el} size={22} />
+              <span className="font-body-en text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: d.tint }}>
+                {d.eyebrow}
+              </span>
             </div>
-          )
-        })}
+
+            <h2 className="mt-4 text-2xl">{d.title}</h2>
+            <p className="mt-1.5 text-sm text-ink-soft">{d.lead}</p>
+
+            <div className="mt-6 flex items-baseline gap-1.5">
+              <span className="text-xs text-muted">เริ่มต้น</span>
+              <span className="font-display-en text-4xl font-semibold text-ink">{d.price}</span>
+              <span className="text-sm text-muted">{d.unit}</span>
+            </div>
+            <div className="mt-1 text-sm text-gold">{d.hint}</div>
+
+            <ul className="mt-5 flex-1 space-y-2">
+              {d.points.map((p) => (
+                <li key={p} className="flex items-start gap-2 text-sm text-ink-soft">
+                  <Check /> {p}
+                </li>
+              ))}
+            </ul>
+
+            <span className="btn-ghost mt-6 justify-center group-hover:border-gold group-hover:text-gold">
+              {d.cta} →
+            </span>
+          </Link>
+        ))}
       </div>
 
-      {/* depth tiers */}
-      <div className="mx-auto mt-16 max-w-4xl">
-        <h2 className="text-center text-2xl">ระดับความลึกของรายงาน (ต่อคน / เมื่อเกินโควตา)</h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          {DEPTH_TIERS.map((d) => (
-            <div
-              key={d.id}
-              className={`rounded-lg border bg-card p-6 ${d.highlight ? 'border-gold shadow-soft' : 'border-line'}`}
-            >
-              <div className="flex items-baseline justify-between">
-                <span className="font-medium text-ink">{d.label}</span>
-                <span className="cjk text-sm text-muted">{d.cn}</span>
-              </div>
-              <div className="mt-2 font-display-en text-3xl font-semibold text-gold">
-                +{thb(d.price)} <span className="text-sm text-muted">฿/คน</span>
-              </div>
-              <p className="mt-2 text-sm text-ink-soft">{d.blurb}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      <p className="mt-8 text-center text-sm text-muted">
+        ยังไม่แน่ใจว่าเหมาะกับแบบไหน?{' '}
+        <Link href="/report" className="text-gold hover:underline">
+          ดูตัวอย่างรายงานก่อน
+        </Link>
+      </p>
 
-      {/* add-ons */}
-      <div className="mx-auto mt-16 max-w-4xl">
-        <h2 className="text-center text-2xl">บริการเสริม (ต่อการวิเคราะห์)</h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          {ADDONS.map((a) => (
-            <div
-              key={a.id}
-              className={`flex items-start justify-between rounded-lg border bg-card p-5 ${
-                a.comingSoon ? 'border-dashed border-line opacity-80' : 'border-line'
-              }`}
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-ink">{a.label}</span>
-                  <span className="cjk text-xs text-muted">{a.cn}</span>
-                  {a.comingSoon && <span className="chip !py-0.5 text-[10px] text-terracotta">Coming Soon</span>}
-                </div>
-                <p className="mt-1 text-sm text-ink-soft">{a.description}</p>
-                {a.turnaround && <p className="mt-1 text-xs text-muted">ส่งมอบ: {a.turnaround}</p>}
-              </div>
-              <div className="ml-3 flex-none text-right font-semibold text-gold">
-                {a.comingSoon ? 'เร็วๆ นี้' : `+${thb(a.price ?? 0)}`}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-6 rounded-lg border border-line bg-paper-warm/50 p-5 text-center text-sm text-ink-soft">
-          <b className="text-ink">Team Roster:</b> วิเคราะห์รวมทั้งทีม — {TEAM_FREE_SEATS} คนแรกฟรี ·
-          คนที่ {TEAM_FREE_SEATS + 1} เป็นต้นไปเพียง {TEAM_EXTRA_SEAT_PRICE} บาท/คน (โปร “คนละครึ่งพลัส”)
-        </div>
-        <p className="mt-4 text-center text-xs text-muted">
-          * หมายเหตุ: รายการ “Executive Analysis (+89)” กับระดับ “Executive Insights (+399)”
-          ยังรอสรุปว่าเป็นบริการเดียวกันหรือคนละตัว
-        </p>
-      </div>
+      <section className="mt-16">
+        <h2 className="text-center text-2xl sm:text-3xl">คำถามที่พบบ่อย</h2>
+        <Faq items={SHARED_FAQ} />
+      </section>
+
+      <PaymentNote />
     </div>
-  )
-}
-
-function Check() {
-  return (
-    <svg className="mt-1 h-3.5 w-3.5 flex-none text-jade" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
   )
 }

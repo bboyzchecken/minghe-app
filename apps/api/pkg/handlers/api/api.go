@@ -100,6 +100,10 @@ func (s *Server) Start() error {
 	// ใช้ OptionalJwt เพราะผู้ใช้ยอมรับเงื่อนไขได้ก่อนล็อกอิน (โฟลว์ trial)
 	e.POST("/consents", s.CreateConsent, s.OptionalJwt())
 
+	/* ── แกะลิงก์ Google Maps (สาธารณะ) — F-08 ──────────── */
+	// ต้องเรียกได้ก่อนล็อกอิน เพราะผู้ใช้กรอกฟอร์มได้ก่อนสมัคร (F-03)
+	e.POST("/geo/resolve", s.ResolvePlace)
+
 	/* ── เปิดรายงานด้วยรหัส (สาธารณะ) ────────────────────── */
 	e.POST("/r", s.OpenReportByCode)
 
@@ -125,6 +129,8 @@ func (s *Server) Start() error {
 	api.GET("/organizations/:id/members", s.ListOrganizationMembers)
 	api.POST("/organizations/:id/members", s.AddOrganizationMember)
 	api.DELETE("/organizations/:id/members/:userId", s.RemoveOrganizationMember)
+	api.GET("/organizations/:id/invites", s.ListOrganizationInvites)
+	api.DELETE("/organizations/:id/invites/:inviteId", s.RevokeOrganizationInvite)
 
 	// team roster — F-25 ข, ป้อนข้อมูลให้ F-20
 	api.GET("/organizations/:id/teams", s.ListTeams)

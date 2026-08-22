@@ -38,6 +38,40 @@ type OrganizationMember struct {
 	Status         string    `gorm:"size:16;default:active" json:"status"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+
+	User *User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+// สถานะคำเชิญเข้าองค์กร (F-05)
+const (
+	InviteStatusPending  = "pending"
+	InviteStatusAccepted = "accepted"
+	InviteStatusRevoked  = "revoked"
+)
+
+// OrganizationInvite — คำเชิญที่เจ้าของส่งไปยังอีเมลที่ "ยังไม่มีบัญชี" ก็ได้
+//
+// ทำไมต้องมีตารางนี้: ถ้าเพิ่มสมาชิกได้เฉพาะคนที่สมัครแล้ว เจ้าของต้องไปบอกให้อีกฝ่าย
+// สมัครก่อนแล้วค่อยกลับมากดเพิ่ม — คำเชิญค้างไว้ตรงนี้แล้วผูกให้อัตโนมัติตอนเขาเข้าระบบครั้งแรก
+type OrganizationInvite struct {
+	ID              uint       `gorm:"primarykey" json:"id"`
+	OrganizationID  uint       `gorm:"index:idx_invite_org_email,unique;not null" json:"organization_id"`
+	Email           string     `gorm:"index:idx_invite_org_email,unique;size:191;not null" json:"email"`
+	Role            string     `gorm:"size:16;default:hr" json:"role"`
+	InvitedByUserID uint       `gorm:"index" json:"invited_by_user_id"`
+	InvitedByName   string     `gorm:"size:191" json:"invited_by_name"`
+	Status          string     `gorm:"size:16;default:pending" json:"status"`
+	ExpiresAt       time.Time  `json:"expires_at"`
+	AcceptedAt      *time.Time `json:"accepted_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+
+	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+}
+
+// Expired บอกว่าคำเชิญหมดอายุแล้วหรือยัง (ExpiresAt เป็นศูนย์ = ไม่มีวันหมดอายุ)
+func (i OrganizationInvite) Expired(now time.Time) bool {
+	return !i.ExpiresAt.IsZero() && i.ExpiresAt.Before(now)
 }
 
 // Team — ชุดพนักงานที่เก็บไว้เทียบกับ candidate ใหม่ได้เรื่อย ๆ (F-25 ข้อ ข)
@@ -80,7 +114,15 @@ type OrganizationStore interface {
 	AddMember(member *OrganizationMember) error
 	FindMember(orgID, userID uint) (*OrganizationMember, error)
 	ListMembers(orgID uint) ([]*OrganizationMember, error)
+	UpdateMember(member *OrganizationMember) error
 	RemoveMember(orgID, userID uint) error
+
+	CreateInvite(invite *OrganizationInvite) error
+	FindInvite(id int) (*OrganizationInvite, error)
+	ListInvites(orgID uint, status string) ([]*OrganizationInvite, error)
+	// ListPendingInvitesByEmail ใช้ตอนผู้ใช้เข้าระบบ เพื่อผูกคำเชิญที่ค้างอยู่ให้อัตโนมัติ
+	ListPendingInvitesByEmail(email string) ([]*OrganizationInvite, error)
+	UpdateInvite(invite *OrganizationInvite) error
 
 	CreateTeam(team *Team) error
 	FindTeam(id int) (*Team, error)

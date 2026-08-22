@@ -43,6 +43,9 @@ type Profile struct {
 	BirthLng           *float64 `json:"birth_lng"`
 	BirthProvince      string   `gorm:"size:64" json:"birth_province"` // fallback เมื่อแกะลิงก์ไม่ได้
 	SolarTimeOffsetMin *int     `json:"solar_time_offset_min"`         // 真太陽時
+	// เขตเวลาของสถานที่เกิดที่ผู้ใช้ยืนยันแล้ว — จำเป็นสำหรับคนเกิดต่างประเทศ (F-08 ข้อ 2)
+	// ว่าง = ถือเป็นไทย (UTC+7) เหมือนเดิม
+	BirthTimezoneOffsetHours *float64 `json:"birth_timezone_offset_hours"`
 
 	CurrentIndustryID string `gorm:"size:64" json:"current_industry_id"` // ประเภทธุรกิจปัจจุบัน (F-09)
 

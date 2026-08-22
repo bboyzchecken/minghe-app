@@ -23,12 +23,23 @@ import {
   type AdminUserRow,
   type AuthResult,
   type CreateOrderDraft,
+  type InviteResult,
   type MingheClient,
   type MockAccount,
   type OrderRecord,
+  type OrgInvite,
+  type OrgMember,
+  type OrgRole,
   type OtpChallenge,
+  type ProfileKind,
   type RegisterInput,
   type ResetPasswordInput,
+  type ResolvedPlace,
+  type RuntimeConfig,
+  type SaveProfileInput,
+  type SavedProfile,
+  type SavedTeam,
+  type SavedTeamMember,
   type SessionUser,
   type Side,
 } from './types'
@@ -45,6 +56,97 @@ interface ApiUser {
   email: string
   name: string
   role: string
+  status?: string
+}
+
+interface ApiMember {
+  user_id: number
+  role: string
+  status: string
+  user?: ApiUser | null
+}
+
+interface ApiInvite {
+  id: number
+  email: string
+  role: string
+  invited_by_name: string
+  created_at: string
+  expires_at: string
+}
+
+interface ApiProfile {
+  id: number
+  kind: string
+  name: string
+  gender: string
+  birth_date: string
+  birth_time: string
+  birth_province: string
+  birth_place_url: string
+  birth_place_label: string
+  birth_lat: number | null
+  birth_lng: number | null
+  birth_timezone_offset_hours: number | null
+  organization_id: number | null
+  created_at: string
+}
+
+interface ApiTeam {
+  id: number
+  name: string
+  note: string
+}
+
+interface ApiTeamMember {
+  profile_id: number
+  position: string
+  is_lead: boolean
+  profile?: ApiProfile | null
+}
+
+function toOrgRole(role: string): OrgRole {
+  return role === 'owner' || role === 'hr' ? role : 'viewer'
+}
+
+function toSavedProfile(p: ApiProfile): SavedProfile {
+  const kind: ProfileKind =
+    p.kind === 'self' || p.kind === 'employee' || p.kind === 'executive' ? p.kind : 'candidate'
+  return {
+    id: String(p.id),
+    kind,
+    name: p.name,
+    // API ส่งวันเกิดเป็น timestamp เต็ม — หน้าเว็บใช้แค่ส่วนวันที่ (ISO) แล้วค่อยแปลงเป็น DD/MM/YYYY ตอนแสดง
+    birthDate: (p.birth_date ?? '').slice(0, 10),
+    birthTime: p.birth_time ?? '',
+    gender: p.gender === 'male' || p.gender === 'female' ? p.gender : '',
+    province: p.birth_province ?? '',
+    placeLabel: p.birth_place_label ?? '',
+    placeUrl: p.birth_place_url ?? '',
+    lat: p.birth_lat ?? undefined,
+    lng: p.birth_lng ?? undefined,
+    timezoneOffsetHours: p.birth_timezone_offset_hours ?? undefined,
+    organizationId: p.organization_id ? String(p.organization_id) : undefined,
+    createdAt: p.created_at,
+  }
+}
+
+/** แปลงฟอร์มเป็น body ของ API — ใช้ร่วมกันทั้งตอนสั่งซื้อและตอนบันทึกเข้าคลัง (F-25) */
+function toProfileBody(input: SaveProfileInput) {
+  return {
+    kind: input.kind,
+    name: input.name,
+    gender: input.gender ?? '',
+    birth_date: isoToDisplay(input.birthDate),
+    birth_time: input.birthTime ?? '',
+    birth_province: input.province ?? '',
+    birth_place_url: input.placeUrl ?? '',
+    birth_place_label: input.placeLabel ?? '',
+    birth_lat: input.lat ?? null,
+    birth_lng: input.lng ?? null,
+    birth_timezone_offset_hours: input.timezoneOffsetHours ?? null,
+    organization_id: input.organizationId ? Number(input.organizationId) : null,
+  }
 }
 
 interface ApiOrder {
@@ -92,6 +194,41 @@ async function call<T>(
   return payload as T
 }
 
+/**
+ * เหมือน call() แต่คืน status code มาด้วย
+ * ใช้ตอนที่ "สำเร็จ" มีหลายความหมาย เช่น เชิญสมาชิกแล้วได้ 201/200/202 คนละเรื่องกัน
+ */
+async function callWithStatus<T>(
+  path: string,
+  options: { method?: string; token?: string; body?: unknown } = {},
+): Promise<{ status: number; data: T }> {
+  const { method = 'GET', token, body } = options
+
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: {
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    })
+  } catch {
+    throw new ClientError('ติดต่อเซิร์ฟเวอร์ไม่ได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง')
+  }
+
+  const text = await res.text()
+  const payload = text ? safeParse(text) : null
+
+  if (!res.ok) {
+    const message =
+      (payload as { error?: string } | null)?.error ?? `คำขอไม่สำเร็จ (HTTP ${res.status})`
+    throw new ClientError(message, res.status)
+  }
+  return { status: res.status, data: payload as T }
+}
+
 function safeParse(text: string): unknown {
   try {
     return JSON.parse(text)
@@ -108,7 +245,12 @@ async function resolveSide(
   token: string,
   role: string,
   userId: number,
-): Promise<{ side: Side; orgRole?: 'owner' | 'hr' | 'viewer'; organizationName?: string }> {
+): Promise<{
+  side: Side
+  orgRole?: 'owner' | 'hr' | 'viewer'
+  organizationId?: string
+  organizationName?: string
+}> {
   if (role === 'admin') return { side: 'admin' }
 
   try {
@@ -132,7 +274,7 @@ async function resolveSide(
       } catch {
         /* อ่าน role ไม่ได้ก็ยังใช้งานฝั่งองค์กรได้ */
       }
-      return { side: 'employer', orgRole, organizationName: org.name }
+      return { side: 'employer', orgRole, organizationId: String(org.id), organizationName: org.name }
     }
   } catch {
     // องค์กรอ่านไม่ได้ก็ไม่ควรทำให้ล็อกอินล้ม — ถือว่าเป็นฝั่งคนทำงาน
@@ -176,16 +318,29 @@ function toChallenge(res: { ref: string; dev_code?: string }): OtpChallenge {
 export const liveClient: MingheClient = {
   mode: 'live',
 
-  async mockAccounts() {
-    // API อาจถูกตั้งเป็นโหมด mock อยู่ — ถ้าใช่จะส่งบัญชีทดลองกลับมาให้แสดงเป็นปุ่ม
+  async runtimeConfig(): Promise<RuntimeConfig> {
+    // /mode บอกทั้งโหมดของ API, สถานะปุ่ม Google และบัญชีทดลอง (ถ้า API อยู่โหมด mock)
     try {
-      const res = await call<{ mock_accounts: (MockAccount & { org_role?: string })[] | null }>('/mode')
-      return (res.mock_accounts ?? []).map((a) => ({
-        ...a,
-        orgRole: a.org_role === 'owner' || a.org_role === 'hr' ? a.org_role : undefined,
-      }))
+      const res = await call<{
+        mode: string
+        google_login_enabled: boolean
+        google_client_id?: string
+        google_login_note?: string
+        mock_accounts: (MockAccount & { org_role?: string })[] | null
+      }>('/mode')
+      return {
+        mode: res.mode === 'mock' ? 'mock' : 'live',
+        googleLoginEnabled: Boolean(res.google_login_enabled && res.google_client_id),
+        googleClientId: res.google_client_id || undefined,
+        googleLoginNote: res.google_login_note || undefined,
+        mockAccounts: (res.mock_accounts ?? []).map((a) => ({
+          ...a,
+          orgRole: a.org_role === 'owner' || a.org_role === 'hr' ? a.org_role : undefined,
+        })),
+      }
     } catch {
-      return []
+      // ติดต่อ API ไม่ได้ — ปิดปุ่ม Google ไว้ก่อน ดีกว่าปล่อยให้กดแล้วค้าง
+      return { mode: 'live', googleLoginEnabled: false, mockAccounts: [] }
     }
   },
 
@@ -197,9 +352,37 @@ export const liveClient: MingheClient = {
     return { token: res.token, user: await toSessionUser(res.token, res.user) }
   },
 
-  async loginWithGoogle(): Promise<AuthResult> {
-    // ปุ่มบนหน้าเว็บถูกปิดอยู่แล้ว ทางนี้เป็นชั้นกันพลาด
-    throw new ClientError('การเข้าสู่ระบบด้วย Google ยังไม่เปิดใช้งาน', 501)
+  /**
+   * ส่ง ID token ที่ได้จาก Google Identity Services ให้ Go ตรวจกับ Google แล้วออก session (F-02)
+   * ฝั่งหน้าเว็บไม่แตะ client secret เลย — อยู่ที่ server ที่เดียวตามที่ตัดสินไว้
+   */
+  async loginWithGoogle(idToken: string): Promise<AuthResult> {
+    const res = await call<{ token: string; user: ApiUser }>('/auth/google', {
+      method: 'POST',
+      body: { id_token: idToken },
+    })
+    return { token: res.token, user: await toSessionUser(res.token, res.user) }
+  },
+
+  /* ── สถานที่เกิดจากลิงก์ Google Maps (F-08) ─────────────── */
+
+  async resolvePlace(url): Promise<ResolvedPlace> {
+    const res = await call<{
+      lat: number
+      lng: number
+      label: string
+      timezone_offset_hours: number
+      timezone_region?: string
+      timezone_approximate: boolean
+    }>('/geo/resolve', { method: 'POST', body: { url } })
+    return {
+      lat: res.lat,
+      lng: res.lng,
+      label: res.label,
+      timezoneOffsetHours: res.timezone_offset_hours,
+      timezoneRegion: res.timezone_region,
+      timezoneApproximate: res.timezone_approximate,
+    }
   },
 
   async me(token) {
@@ -289,14 +472,21 @@ export const liveClient: MingheClient = {
     const profile = await call<{ id: number }>('/api/profiles', {
       method: 'POST',
       token,
-      body: {
+      body: toProfileBody({
         kind: draft.product === 'jobseeker' ? 'self' : 'candidate',
         name: subject.name,
         gender: subject.gender ?? '',
-        birth_date: isoToDisplay(subject.birthDate),
-        birth_time: subject.birthTime ?? '',
-        birth_province: subject.province ?? '',
-      },
+        birthDate: subject.birthDate,
+        birthTime: subject.birthTime ?? '',
+        province: subject.province ?? '',
+        placeUrl: subject.placeUrl,
+        placeLabel: subject.placeLabel,
+        lat: subject.latitude,
+        lng: subject.longitude,
+        timezoneOffsetHours: subject.tzOffsetHours,
+        // โปรไฟล์ฝั่งองค์กรเป็นของ "องค์กร" ไม่ใช่ของคนกรอก — HR ลาออกแล้วข้อมูลยังอยู่กับบริษัท
+        organizationId: draft.product === 'employer' ? draft.organizationId : undefined,
+      }),
     })
 
     const snapshot: OrderSnapshot = {
@@ -333,6 +523,130 @@ export const liveClient: MingheClient = {
       body: { code, pin: pin ?? '' },
     })
     return toOrderRecord(res.order)
+  },
+
+  /* ── องค์กรและสมาชิก (F-05) ─────────────────────────────── */
+
+  async listOrgMembers(token, orgId): Promise<OrgMember[]> {
+    const myId = userIdFromToken(token)
+    const res = await call<{ data: ApiMember[] | null }>(`/api/organizations/${orgId}/members`, { token })
+    return (res.data ?? []).map((m) => ({
+      userId: String(m.user_id),
+      name: m.user?.name || '(ยังไม่ได้ตั้งชื่อ)',
+      email: m.user?.email || '—',
+      role: toOrgRole(m.role),
+      status: m.user?.status === 'deactivated' ? 'deactivated' : 'active',
+      isMe: m.user_id === myId,
+    }))
+  },
+
+  async listOrgInvites(token, orgId): Promise<OrgInvite[]> {
+    const res = await call<{ data: ApiInvite[] | null }>(`/api/organizations/${orgId}/invites`, { token })
+    return (res.data ?? []).map((i) => ({
+      id: String(i.id),
+      email: i.email,
+      role: toOrgRole(i.role),
+      invitedByName: i.invited_by_name,
+      createdAt: i.created_at,
+      expiresAt: i.expires_at,
+    }))
+  },
+
+  /**
+   * เชิญสมาชิกด้วยอีเมล — API ตอบต่างกันตามว่าอีเมลนั้นมีบัญชีแล้วหรือยัง
+   * 201 = เข้าเป็นสมาชิกทันที · 200 = เปลี่ยนบทบาทของสมาชิกเดิม · 202 = ค้างเป็นคำเชิญ
+   */
+  async inviteOrgMember(token, orgId, email, role): Promise<InviteResult> {
+    const res = await callWithStatus<{ id?: number; user_id?: number }>(
+      `/api/organizations/${orgId}/members`,
+      { method: 'POST', token, body: { email, role } },
+    )
+    const outcome =
+      res.status === 202 ? 'invite-sent' : res.status === 200 ? 'role-updated' : 'member-added'
+    return { outcome, email, role }
+  },
+
+  async removeOrgMember(token, orgId, userId) {
+    await call(`/api/organizations/${orgId}/members/${userId}`, { method: 'DELETE', token })
+  },
+
+  async revokeOrgInvite(token, orgId, inviteId) {
+    await call(`/api/organizations/${orgId}/invites/${inviteId}`, { method: 'DELETE', token })
+  },
+
+  /* ── ระบบ memory (F-25) ─────────────────────────────────── */
+
+  async listProfiles(token, opts): Promise<SavedProfile[]> {
+    const params = new URLSearchParams({ limit: '100' })
+    if (opts?.kind) params.set('kind', opts.kind)
+    if (opts?.organizationId) params.set('organization_id', opts.organizationId)
+    const res = await call<{ data: ApiProfile[] | null }>(`/api/profiles?${params.toString()}`, { token })
+    return (res.data ?? []).map(toSavedProfile)
+  },
+
+  async saveProfile(token, input): Promise<SavedProfile> {
+    const created = await call<ApiProfile>('/api/profiles', {
+      method: 'POST',
+      token,
+      body: toProfileBody(input),
+    })
+    return toSavedProfile(created)
+  },
+
+  async deleteProfile(token, id) {
+    await call(`/api/profiles/${id}`, { method: 'DELETE', token })
+  },
+
+  async listTeams(token, orgId): Promise<SavedTeam[]> {
+    const res = await call<{ data: ApiTeam[] | null }>(`/api/organizations/${orgId}/teams`, { token })
+    const teams = res.data ?? []
+    // จำนวนสมาชิกไม่ได้มากับรายการทีม — ดึงทีละทีมเพื่อให้การ์ดบอกจำนวนได้
+    // ทีมต่อองค์กรมีไม่กี่ทีม จึงยังคุ้มกว่าการเพิ่ม endpoint ใหม่ตอนนี้
+    return Promise.all(
+      teams.map(async (t) => {
+        let memberCount = 0
+        try {
+          const members = await call<{ data: ApiTeamMember[] | null }>(`/api/teams/${t.id}/members`, { token })
+          memberCount = (members.data ?? []).length
+        } catch {
+          /* นับไม่ได้ก็ยังแสดงทีมได้ */
+        }
+        return { id: String(t.id), name: t.name, note: t.note ?? '', memberCount }
+      }),
+    )
+  },
+
+  async createTeam(token, orgId, name, note): Promise<SavedTeam> {
+    const created = await call<ApiTeam>(`/api/organizations/${orgId}/teams`, {
+      method: 'POST',
+      token,
+      body: { name, note: note ?? '' },
+    })
+    return { id: String(created.id), name: created.name, note: created.note ?? '', memberCount: 0 }
+  },
+
+  async listTeamMembers(token, teamId): Promise<SavedTeamMember[]> {
+    const res = await call<{ data: ApiTeamMember[] | null }>(`/api/teams/${teamId}/members`, { token })
+    return (res.data ?? [])
+      .filter((m): m is ApiTeamMember & { profile: ApiProfile } => Boolean(m.profile))
+      .map((m) => ({
+        profileId: String(m.profile_id),
+        position: m.position ?? '',
+        isLead: Boolean(m.is_lead),
+        profile: toSavedProfile(m.profile),
+      }))
+  },
+
+  async addTeamMember(token, teamId, profileId, position) {
+    await call(`/api/teams/${teamId}/members`, {
+      method: 'POST',
+      token,
+      body: { profile_id: Number(profileId), position: position ?? '' },
+    })
+  },
+
+  async removeTeamMember(token, teamId, profileId) {
+    await call(`/api/teams/${teamId}/members/${profileId}`, { method: 'DELETE', token })
   },
 
   /* ── Admin Console ──────────────────────────────────────── */

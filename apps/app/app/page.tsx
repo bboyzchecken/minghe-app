@@ -1,13 +1,17 @@
 import Link from 'next/link'
 import { ELEMENT_META, ELEMENT_ORDER } from '@/lib/brand'
 import { ElementIcon } from '@/components/element-icon'
+import { Logo } from '@/components/logo'
 import { ElementGallery } from '@/components/element-gallery'
 
+const STEP_DETAIL =
+  'วิเคราะห์ความสมพงษ์ ความส่งเสริมและสิ่งที่ต้องระวัง จากดวงของบริษัท เทียบกับดวงว่าที่ทีมงาน'
+
 const STEPS = [
-  { n: '01', th: 'กรอกวัน–เวลาเกิด', detail: 'ของ candidate หรือของคุณเอง พร้อมจังหวัดเกิด (ปรับเวลาสุริยะจริง)' },
-  { n: '02', th: 'ระบุฝ่ายองค์กร', detail: 'ดวงผู้บริหาร / วันก่อตั้งบริษัท / ธาตุอุตสาหกรรม — เลือกได้หลายชั้น (cross-data)' },
-  { n: '03', th: 'เครื่องตั้งเสาสี่ต้น', detail: 'คำนวณปาจือแม่นระดับซินแส แล้วประเมินดัชนีสมพงษ์ (合 Index)' },
-  { n: '04', th: 'รับรายงาน + รหัสเปิด', detail: 'อ่านออนไลน์ / พิมพ์ PDF เปิดด้วยรหัสที่ปลอดภัย' },
+  { n: '01', th: 'Data Collection', detail: STEP_DETAIL },
+  { n: '02', th: 'Modeling', detail: STEP_DETAIL },
+  { n: '03', th: 'Scenario Analysis', detail: STEP_DETAIL },
+  { n: '04', th: 'Story telling', detail: STEP_DETAIL },
 ]
 
 export default function LandingPage() {
@@ -63,12 +67,13 @@ export default function LandingPage() {
           {/* hero image + floating score card */}
           <div className="fade-up relative">
             <div className="relative overflow-hidden rounded-[28px] border border-line shadow-lift">
+              {/* F-16 — ภาพ hero ที่ represent ครบห้าธาตุ (ไม้ ไฟ ดิน ทอง น้ำ) ตามสไลด์หน้า 5 */}
               <img
-                src="/img/hero-man.jpg"
-                alt="命合 Mìnghé"
-                className="aspect-[3/4] w-full object-cover object-top"
-                width={832}
-                height={1216}
+                src="/img/hero-elements.jpg"
+                alt="命合 Mìnghé — ไม้ ไฟ ดิน ทอง น้ำ ครบห้าธาตุ"
+                className="aspect-[3/4] w-full object-cover object-center"
+                width={960}
+                height={1280}
               />
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/25 via-transparent to-transparent" />
             </div>
@@ -109,10 +114,11 @@ export default function LandingPage() {
       {/* ---------- TWO PRODUCTS ---------- */}
       <section className="container-page py-10 md:py-16">
         <div className="mx-auto max-w-2xl text-center">
-          <span className="eyebrow">สองผลิตภัณฑ์ · เครื่องคำนวณเดียว</span>
-          <h2 className="mt-3 text-3xl md:text-4xl">เปิดทั้งสองฝั่ง ดูจากมุมของคุณ</h2>
-          <p className="mt-3 text-ink-soft">
-            องค์กรมองหาคนที่เข้ากับทีมและวัฒนธรรม · คนทำงานมองหาที่ที่ส่งเสริมดวงตัวเอง — ใช้ engine ปาจือชุดเดียวกัน
+          <span className="eyebrow">เบื้องหลังความสำเร็จนับพันปี</span>
+          <h2 className="mt-3 text-3xl md:text-4xl">โลกไปไว แต่คุณไปได้ไกลกว่า</h2>
+          <p className="mt-3 text-ink-soft text-balance">
+            ศาสตร์ปาจื้อเฉพาะทางด้านการบริหาร จากการเก็บข้อมูลกว่าพันปีด้วยศาสตร์ตะวันออก Bazi Work Specialized
+            Analytics เพื่อคุณและองค์กร
           </p>
         </div>
         <div className="mt-10 grid gap-6 md:grid-cols-2">
@@ -153,14 +159,16 @@ export default function LandingPage() {
               <h2 className="mt-2 text-3xl">ทำงานอย่างไร</h2>
             </div>
             <p className="max-w-md text-sm text-ink-soft">
-              เครื่องคำนวณ (engine) ทำหน้าที่ “คำนวณให้แม่น” — การเรียบเรียงภาษาทำหน้าที่ “อธิบายให้เข้าใจ” แยกกันชัดเจน
+              ข้อมูลพันปี
+              <br />
+              วิถี Data Science
             </p>
           </div>
           <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {STEPS.map((s) => (
               <div key={s.n} className="relative rounded-2xl border border-line bg-cloud p-5">
                 <span className="font-display-en text-3xl font-semibold text-gold/70">{s.n}</span>
-                <h3 className="mt-2 text-lg">{s.th}</h3>
+                <h3 className="mt-2 font-display-en text-lg font-semibold">{s.th}</h3>
                 <p className="mt-1.5 text-sm text-ink-soft">{s.detail}</p>
               </div>
             ))}
@@ -191,11 +199,8 @@ export default function LandingPage() {
           />
           <div className="absolute inset-0 bg-gradient-to-r from-paper/95 via-paper/55 to-transparent" />
           <div className="absolute inset-0 flex flex-col justify-center px-8 md:px-14">
-            <div className="flex items-baseline gap-2.5">
-              <span className="cjk text-3xl text-gold md:text-4xl">命合</span>
-              <span className="font-display-en text-3xl font-semibold text-gold md:text-4xl">Ming He</span>
-            </div>
-            <p className="mt-1 font-script text-xl text-terracotta md:text-2xl">สมพงษ์คนกับองค์กร</p>
+            {/* F-11 — โลโก้จริงจากไฟล์แบรนด์ (มี tagline อยู่ในตัว) */}
+            <Logo variant="lockup" height={56} href={null} />
             <p className="mt-2 max-w-sm text-sm text-ink-soft">
               ห้าธาตุที่ต่างกันไม่ใช่เรื่องดีหรือร้าย — แต่คือการรู้จังหวะที่จะเสริมกัน
             </p>

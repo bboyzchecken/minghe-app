@@ -48,7 +48,7 @@ export default function OpenReportPage() {
     <main className="texture-paper flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-16">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center text-center">
-          <Logo />
+          <Logo variant="lockup" height={46} />
           <p className="eyebrow mt-6">Mìnghé Fit Report</p>
           <h1 className="mt-2 text-3xl">
             เปิดรายงานด้วยรหัส <span className="cjk text-gold">命合</span>

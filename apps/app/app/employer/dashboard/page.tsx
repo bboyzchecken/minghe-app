@@ -6,9 +6,10 @@ import { useCallback } from 'react'
 import { ElementIcon } from '@/components/element-icon'
 import { RequireLogin } from '@/components/require-login'
 import { RoleBadge } from '@/components/role-badge'
+import { OrgMembersCard } from '@/components/org-members-card'
 import { RoleCapabilities } from '@/components/role-capabilities'
-import type { OrderRecord } from '@/lib/api'
-import { useOrders } from '@/lib/queries'
+import type { OrderRecord, SavedProfile } from '@/lib/api'
+import { useOrders, useSavedProfiles, useTeams } from '@/lib/queries'
 import { useSession } from '@/lib/session'
 import { thb } from '@/lib/pricing'
 import { saveCurrentOrder } from '@/lib/store'
@@ -48,9 +49,14 @@ function EmployerDashboard() {
             {user && <RoleBadge user={user} />}
           </p>
         </div>
-        <Link href="/employer/new" className="btn-primary">
-          + วิเคราะห์ candidate ใหม่
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/employer/memory" className="btn-ghost !py-2 text-sm">
+            คลังข้อมูล
+          </Link>
+          <Link href="/employer/new" className="btn-primary">
+            + วิเคราะห์ candidate ใหม่
+          </Link>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -127,41 +133,11 @@ function EmployerDashboard() {
         <div className="space-y-6">
           {user && <RoleCapabilities user={user} />}
 
-          <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
-            <h2 className="text-lg">Profile Memory</h2>
-            <p className="mt-2 text-sm text-ink-soft">
-              ระบบจำข้อมูลผู้บริหาร วันก่อตั้ง และทีมที่เคยกรอก ให้เลือกใช้ซ้ำในการวิเคราะห์ครั้งถัดไป
-            </p>
-            <div className="mt-3 space-y-3">
-              <ProfileRow icon="earth" title="Company Profile" detail={user?.organizationName ?? 'ยังไม่ได้ตั้งค่า'} />
-              <ProfileRow icon="water" title="Executive Profile" detail="เพิ่มจากขั้น “ฝ่ายองค์กร” ของการวิเคราะห์ครั้งแรก" />
-            </div>
-          </div>
+          {/* F-25 — สรุปคลังข้อมูลจริง ไม่ใช่ข้อความบรรยายเปล่า ๆ */}
+          <MemorySummaryCard organizationName={user?.organizationName} />
 
-          {/* สมาชิกองค์กร — จุดที่เจ้าของกับ HR ต่างกันชัดที่สุด */}
-          <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
-            <h2 className="text-lg">สมาชิกองค์กร</h2>
-            <div className="mt-3 space-y-2">
-              {user && (
-                <MemberRow
-                  name={user.name}
-                  email={user.email}
-                  role={user.orgRole === 'hr' ? 'HR' : 'เจ้าของ'}
-                  color={user.orgRole === 'hr' ? '#5E9BB5' : '#b07d2b'}
-                />
-              )}
-            </div>
-            {user?.orgRole === 'hr' ? (
-              <p className="mt-4 flex items-start gap-2 rounded-lg bg-paper-warm/60 px-3 py-2 text-xs text-muted">
-                <span>🔒</span>
-                การเพิ่ม/ลบสมาชิกสงวนไว้เฉพาะเจ้าของบัญชีองค์กร — ติดต่อเจ้าของบัญชีหากต้องการเพิ่มคน
-              </p>
-            ) : (
-              <button className="btn-ghost mt-4 w-full !py-2 text-sm" title="ฟอร์มเชิญสมาชิกจะเปิดในรอบถัดไป">
-                + เชิญสมาชิกใหม่
-              </button>
-            )}
-          </div>
+          {/* F-05 — สมาชิกจริง + ฟอร์มเชิญ (จุดที่เจ้าของกับ HR ต่างกันชัดที่สุด) */}
+          {user && <OrgMembersCard user={user} />}
         </div>
       </div>
     </div>
@@ -194,21 +170,59 @@ function StatCard({ el, label, value, sub }: { el: 'metal' | 'water' | 'wood' | 
   )
 }
 
-function MemberRow({ name, email, role, color }: { name: string; email: string; role: string; color: string }) {
+/**
+ * สรุปว่าคลังข้อมูลมีอะไรอยู่จริงบ้าง แล้วพาไปหน้าจัดการ (F-25)
+ * ตัวเลขมาจากแหล่งข้อมูลเดียวกับหน้าคลัง จึงไม่มีทางบอกไม่ตรงกัน
+ */
+function MemorySummaryCard({ organizationName }: { organizationName?: string }) {
+  const { data: profiles = [], isPending } = useSavedProfiles()
+  const { data: teams = [] } = useTeams()
+  const count = (kind: SavedProfile['kind']) => profiles.filter((p) => p.kind === kind).length
+
   return (
-    <div className="flex items-center justify-between rounded-lg bg-paper-warm/50 px-3 py-2">
-      <div>
-        <div className="text-sm text-ink">{name}</div>
-        <div className="font-body-en text-[11px] text-muted">{email}</div>
+    <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg">คลังข้อมูลองค์กร</h2>
+        <Link href="/employer/memory" className="text-xs text-gold hover:underline">
+          จัดการ →
+        </Link>
       </div>
-      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ color, background: `${color}14` }}>
-        {role}
-      </span>
+      <p className="mt-2 text-sm text-ink-soft">
+        ระบบจำโปรไฟล์และทีมที่เคยกรอกไว้ให้ — เลือกใช้ซ้ำได้ในการวิเคราะห์ครั้งถัดไป
+      </p>
+
+      <div className="mt-3 space-y-3">
+        <MemoryRow icon="earth" title="Company Profile" detail={organizationName ?? 'ยังไม่ได้ตั้งค่า'} />
+        <MemoryRow
+          icon="water"
+          title="โปรไฟล์ที่บันทึกไว้"
+          detail={
+            isPending
+              ? 'กำลังโหลด…'
+              : profiles.length === 0
+                ? 'ยังไม่มี — บันทึกอัตโนมัติเมื่อสั่งวิเคราะห์ครั้งแรก'
+                : `${profiles.length} คน · ผู้บริหาร ${count('executive')} · พนักงาน ${count('employee')} · ผู้สมัคร ${count('candidate')}`
+          }
+        />
+        <MemoryRow
+          icon="wood"
+          title="Team Roster"
+          detail={teams.length === 0 ? 'ยังไม่มีทีม — ตั้งทีมแรกได้ในหน้าคลังข้อมูล' : `${teams.length} ทีม`}
+        />
+      </div>
     </div>
   )
 }
 
-function ProfileRow({ icon, title, detail }: { icon: 'earth' | 'water'; title: string; detail: string }) {
+function MemoryRow({
+  icon,
+  title,
+  detail,
+}: {
+  icon: 'earth' | 'water' | 'wood'
+  title: string
+  detail: string
+}) {
   return (
     <div className="flex items-start gap-3 rounded-lg bg-paper-warm/50 p-3">
       <ElementIcon element={icon} size={18} />

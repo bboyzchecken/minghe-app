@@ -79,15 +79,17 @@ export function ReportView({
             <PillarCard key={p.position} pillar={p} />
           ))}
         </div>
-        <div className="mt-4 grid gap-3 rounded-lg bg-paper-warm/50 p-4 text-sm sm:grid-cols-3">
+        <div className="mt-4 grid gap-3 rounded-lg bg-paper-warm/50 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <Fact label="พื้นดวง (ก้านวัน)" value={`${chart.dayMasterCn} · ธาตุ${chart.dayMasterElementTh}`} el={chart.dayMasterElement} />
           <Fact label="ปีนักษัตร" value={chart.zodiacTh} />
+          {/* F-08 — บอกว่าเวลาสุริยะคำนวณจากที่ไหน เพื่อให้ผู้อ่านตรวจย้อนได้ว่าพิกัดถูกคน */}
+          <Fact label="สถานที่เกิด" value={chart.province || 'ไม่ได้ระบุ'} />
           <Fact
             label="เวลาสุริยะจริง"
             value={
               chart.trueSolarTime.applied
                 ? `${chart.trueSolarTime.solarTime} น. (ปรับ ${chart.trueSolarTime.totalCorrectionMinutes} นาที)`
-                : 'ใช้เวลานาฬิกา (ไม่ระบุจังหวัด)'
+                : 'ใช้เวลานาฬิกา (ไม่ระบุสถานที่เกิด)'
             }
           />
         </div>

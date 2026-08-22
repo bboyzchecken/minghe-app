@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import type { SessionUser } from '@/lib/api'
 import { homeForUser, useSession } from '@/lib/session'
 import { Logo } from './logo'
 import { RoleBadge } from './role-badge'
@@ -14,6 +15,16 @@ const NAV = [
   { href: '/report', label: 'ตัวอย่างรายงาน' },
   { href: '/r', label: 'เปิดรายงาน' },
 ]
+
+/**
+ * ราคาแยกเป็นสองหน้าตามกลุ่มผู้ใช้ — คนที่ล็อกอินแล้วพาไปหน้าของฝั่งตัวเองเลย
+ * จะได้ไม่ต้องเลือกซ้ำและไม่เห็นราคาอีกฝั่งจนสับสน
+ */
+function pricingHref(user: SessionUser | null): string {
+  if (user?.side === 'employer') return '/pricing/employer'
+  if (user?.side === 'jobseeker') return '/pricing/jobseeker'
+  return '/pricing'
+}
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false)
@@ -29,12 +40,13 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-line/70 bg-paper/85 backdrop-blur-md">
       <div className="container-page flex h-16 items-center justify-between">
-        <Logo />
+        {/* F-11 — โลโก้จริงแบบไม่มี tagline (ชิ้นที่ออกแบบมาสำหรับพื้นที่แคบ) */}
+        <Logo variant="wordmark" height={34} />
         <nav className="hidden items-center gap-7 md:flex">
           {NAV.map((n) => (
             <Link
               key={n.href}
-              href={n.href}
+              href={n.href === '/pricing' ? pricingHref(user) : n.href}
               className="text-sm text-ink-soft transition-colors hover:text-gold"
             >
               {n.label}
@@ -86,7 +98,7 @@ export function SiteHeader() {
             {NAV.map((n) => (
               <Link
                 key={n.href}
-                href={n.href}
+                href={n.href === '/pricing' ? pricingHref(user) : n.href}
                 onClick={() => setOpen(false)}
                 className="py-2.5 text-sm text-ink-soft"
               >

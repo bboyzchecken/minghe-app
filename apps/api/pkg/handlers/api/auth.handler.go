@@ -112,6 +112,9 @@ func (s *Server) Register(c echo.Context) error {
 		}
 	}
 
+	// ถ้ามีองค์กรเชิญอีเมลนี้ไว้ก่อนหน้า ให้เข้าเป็นสมาชิกทันที (F-05)
+	s.claimPendingInvites(user)
+
 	token, err := s.IssueToken(user)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, request.Err("cannot issue token"))
@@ -150,6 +153,9 @@ func (s *Server) Login(c echo.Context) error {
 		logger.Warn("cannot update last_login_at: ", err)
 	}
 
+	// คำเชิญเข้าองค์กรอาจถูกส่งมาหลังจากมีบัญชีแล้ว จึงต้องเช็กทุกครั้งที่เข้าระบบ (F-05)
+	s.claimPendingInvites(user)
+
 	token, err := s.IssueToken(user)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, request.Err("cannot issue token"))
@@ -176,8 +182,8 @@ func (s *Server) GoogleLogin(c echo.Context) error {
 	if err := c.Validate(&body); err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, err)
 	}
-	// ปิดไว้โดยตั้งใจในเฟสนี้ — ปุ่มบนหน้าเว็บยังแสดงอยู่แต่กดไม่ได้
-	// เปิดได้เมื่อได้ OAuth client จริงแล้ว โดยตั้ง MINGHE_GOOGLE_LOGIN_ENABLED=true (F-02)
+	// เปิดใช้งานเมื่อมี OAuth client จริงเท่านั้น — /mode ประกาศสถานะเดียวกันนี้ให้หน้าเว็บรู้
+	// ตั้ง MINGHE_GOOGLE_LOGIN_ENABLED=true + GOOGLE_OAUTH_CLIENT_ID ใน .env (F-02)
 	if !s.Config.GoogleLoginEnabled || s.Config.OAuth.GoogleClientID == "" {
 		return c.JSON(http.StatusNotImplemented,
 			request.Err("การเข้าสู่ระบบด้วย Google ยังไม่เปิดใช้งาน"))
@@ -251,6 +257,8 @@ func (s *Server) GoogleLogin(c echo.Context) error {
 	if err := s.UserStore.Update(user); err != nil {
 		logger.Warn("cannot update last_login_at: ", err)
 	}
+
+	s.claimPendingInvites(user)
 
 	token, err := s.IssueToken(user)
 	if err != nil {

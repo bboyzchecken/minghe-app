@@ -27,6 +27,12 @@ type profileBody struct {
 	// สถานที่เกิดเป็นลิงก์ Google Maps (F-08) — province เป็นทางสำรองเมื่อแกะลิงก์ไม่ได้
 	BirthPlaceURL string `json:"birth_place_url"`
 	BirthProvince string `json:"birth_province"`
+	// พิกัดและเขตเวลาที่ผู้ใช้ "ยืนยันแล้ว" บนหน้าเว็บ (F-08 ข้อ 3)
+	// ถ้าส่งมาจะเชื่อค่านี้ ไม่ต้องยิงแกะลิงก์ซ้ำ — ค่าที่ผู้ใช้ตรวจแล้วน่าเชื่อกว่าค่าที่เดาเอง
+	BirthLat                 *float64 `json:"birth_lat"`
+	BirthLng                 *float64 `json:"birth_lng"`
+	BirthPlaceLabel          string   `json:"birth_place_label"`
+	BirthTimezoneOffsetHours *float64 `json:"birth_timezone_offset_hours"`
 
 	CurrentIndustryID string `json:"current_industry_id"`
 	ConsentSource     string `json:"consent_source" validate:"omitempty,oneof=self third_party"`
@@ -97,7 +103,7 @@ func (s *Server) CreateProfile(c echo.Context) error {
 		Status:            models.StatusActive,
 	}
 
-	if err := s.applyBirthPlace(profile, body.BirthPlaceURL); err != nil {
+	if err := s.applyBirthPlace(profile, &body); err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, request.Err(err.Error()))
 	}
 
@@ -145,7 +151,7 @@ func (s *Server) UpdateProfile(c echo.Context) error {
 		profile.Kind = body.Kind
 	}
 
-	if err := s.applyBirthPlace(profile, body.BirthPlaceURL); err != nil {
+	if err := s.applyBirthPlace(profile, &body); err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, request.Err(err.Error()))
 	}
 
@@ -172,17 +178,26 @@ func (s *Server) DeleteProfile(c echo.Context) error {
 
 /* ── ตัวช่วย ────────────────────────────────────────────── */
 
-// applyBirthPlace แกะพิกัดจากลิงก์ Google Maps (F-08)
+// applyBirthPlace เก็บสถานที่เกิดลงโปรไฟล์ (F-08)
 //
-// ลิงก์แบบย่อ (maps.app.goo.gl) ต้อง resolve redirect ฝั่ง server — ทำที่นี่ไม่ได้ที่เบราว์เซอร์
-// ถ้าแกะไม่ได้จะไม่ปฏิเสธคำขอทันที แต่จะยอมรับก็ต่อเมื่อมีจังหวัดเกิดเป็นทางสำรอง
-func (s *Server) applyBirthPlace(profile *models.Profile, mapsURL string) error {
-	profile.BirthPlaceURL = mapsURL
-	if mapsURL == "" {
+// ทางหลัก: หน้าเว็บแกะลิงก์ผ่าน POST /geo/resolve ให้ผู้ใช้ยืนยันพิกัดก่อน แล้วส่งพิกัดที่ยืนยันแล้วมา
+// ทางสำรอง: ส่งมาแต่ลิงก์ (เช่น เรียกจาก client เก่าหรือสคริปต์) → แกะให้ตรงนี้
+// แกะไม่ได้ก็ไม่ปฏิเสธคำขอ ตราบใดที่มีจังหวัดเกิดเป็นทางสำรองตามที่ตัดสินไว้ใน F-08 ข้อ 1
+func (s *Server) applyBirthPlace(profile *models.Profile, body *profileBody) error {
+	profile.BirthPlaceURL = body.BirthPlaceURL
+	profile.BirthTimezoneOffsetHours = body.BirthTimezoneOffsetHours
+
+	if body.BirthLat != nil && body.BirthLng != nil {
+		profile.BirthLat = body.BirthLat
+		profile.BirthLng = body.BirthLng
+		profile.BirthPlaceLabel = body.BirthPlaceLabel
+		return nil
+	}
+	if body.BirthPlaceURL == "" {
 		return nil
 	}
 
-	place, err := geo.ResolveGoogleMapsURL(mapsURL)
+	place, err := geo.ResolveGoogleMapsURL(body.BirthPlaceURL)
 	if err != nil {
 		if profile.BirthProvince == "" {
 			return err
@@ -193,6 +208,10 @@ func (s *Server) applyBirthPlace(profile *models.Profile, mapsURL string) error 
 	profile.BirthLat = &place.Lat
 	profile.BirthLng = &place.Lng
 	profile.BirthPlaceLabel = place.Label
+	if profile.BirthTimezoneOffsetHours == nil {
+		tz := geo.GuessTimezone(place.Lat, place.Lng)
+		profile.BirthTimezoneOffsetHours = &tz.OffsetHours
+	}
 	return nil
 }
 

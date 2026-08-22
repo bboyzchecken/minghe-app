@@ -12,6 +12,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { GoogleSignInButton } from '@/components/google-sign-in-button'
 import { OtpField, OtpHint } from '@/components/otp-field'
 import type { AccountType, OtpChallenge } from '@/lib/api'
 import { useRegister, useRequestRegister } from '@/lib/queries'
@@ -97,6 +98,18 @@ export default function RegisterPage() {
           <span className="h-px flex-1 bg-line" />
           <StepDot n={2} active={step === 2} done={false} label="ยืนยัน + ตั้งรหัสผ่าน" />
         </ol>
+
+        {step === 1 && (
+          <>
+            {/* สมัครด้วย Google ได้เลย ไม่ต้องผ่าน OTP — บัญชี Google ยืนยันอีเมลมาแล้ว (F-02) */}
+            <GoogleSignInButton onError={setError} />
+            <div className="my-5 flex items-center gap-3 text-xs text-muted">
+              <span className="h-px flex-1 bg-line" />
+              หรือสมัครด้วยอีเมล
+              <span className="h-px flex-1 bg-line" />
+            </div>
+          </>
+        )}
 
         {step === 1 && (
           <form

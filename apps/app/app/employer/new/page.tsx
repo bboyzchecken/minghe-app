@@ -5,8 +5,10 @@ import type { GenerateReportInput, OrgInput, TeamMemberInput } from '@minghe/rep
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { BirthFields, Field, Select, TextInput, emptyBirth, type BirthValue } from '@/components/forms'
+import { ProfilePicker, SavedTeamPicker } from '@/components/memory-picker'
+import { placeFields, placeSummary } from '@/lib/place'
 import { ConsentCheckbox } from '@/components/consent-checkbox'
-import { DateInput } from '@/components/date-input'
+import { DateInput, isoToDisplay } from '@/components/date-input'
 import { ElementIcon } from '@/components/element-icon'
 import { Stepper, type StepDef } from '@/components/stepper'
 import { ELEMENT_META } from '@/lib/brand'
@@ -118,7 +120,7 @@ export default function EmployerWizard() {
         name: m.name || 'สมาชิกทีม',
         birthDate: m.birthDate,
         birthTime: m.birthTime || undefined,
-        province: m.province || undefined,
+        ...placeFields(m),
       }))
 
   function buildInput(): GenerateReportInput {
@@ -130,7 +132,7 @@ export default function EmployerWizard() {
         executiveName: exec.name || 'ผู้บริหาร',
         birthDate: exec.birthDate,
         birthTime: exec.birthTime,
-        province: exec.province || undefined,
+        ...placeFields(exec),
         team: teamInput,
       }
     } else if (orgMode === 'company-date') {
@@ -144,7 +146,7 @@ export default function EmployerWizard() {
         gender: subject.gender || undefined,
         birthDate: subject.birthDate,
         birthTime: subject.birthTime,
-        province: subject.province || undefined,
+        ...placeFields(subject),
       },
       org,
       targetYear: 2026,
@@ -172,6 +174,8 @@ export default function EmployerWizard() {
         input: buildInput(),
         orgLabel: orgLabel(),
         orgMode,
+        // โปรไฟล์ผู้ถูกวิเคราะห์ถูกเก็บเป็นของ "องค์กร" ไม่ใช่ของคนกรอก (F-25)
+        organizationId: user?.organizationId,
       })
       saveCurrentOrder(order)
       router.push('/report')
@@ -214,6 +218,8 @@ export default function EmployerWizard() {
       <div className="card p-6 md:p-9">
         {step === 0 && (
           <StepShell title="ข้อมูลผู้ถูกวิเคราะห์" subtitle="candidate หรือพนักงานที่ต้องการดูความเข้ากัน">
+            {/* F-25 — เคยกรอกไว้แล้วไม่ต้องกรอกซ้ำ */}
+            <ProfilePicker label="เลือกจากคลังข้อมูล" onPick={(v) => setSubject({ ...subject, ...v })} />
             <BirthFields value={subject} onChange={setSubject} nameLabel="ชื่อผู้ถูกวิเคราะห์" />
           </StepShell>
         )}
@@ -227,7 +233,14 @@ export default function EmployerWizard() {
             </div>
 
             {orgMode === 'executive' && (
-              <BirthFields value={exec} onChange={setExec} nameLabel="ชื่อผู้บริหาร" showGender={false} />
+              <>
+                <ProfilePicker
+                  label="เลือกผู้บริหารจากคลังข้อมูล"
+                  kind="executive"
+                  onPick={(v) => setExec({ ...exec, ...v })}
+                />
+                <BirthFields value={exec} onChange={setExec} nameLabel="ชื่อผู้บริหาร" showGender={false} />
+              </>
             )}
             {orgMode === 'company-date' && (
               <div className="grid gap-4 sm:grid-cols-2">
@@ -346,14 +359,18 @@ export default function EmployerWizard() {
 
         {step === 3 && (
           <StepShell title="ตรวจทานก่อนชำระเงิน" subtitle="ตรวจสอบข้อมูลและยอดชำระ">
-            <ReviewRow label="ผู้ถูกวิเคราะห์" value={`${subject.name || 'ไม่ระบุชื่อ'} · เกิด ${subject.birthDate} ${subject.birthTime} ${subject.province || ''}`} />
+            {/* F-07 — วันที่ในหน้าตรวจทานต้องเป็น วัน/เดือน/ปี เหมือนในฟอร์ม ไม่ใช่รูปแบบ ISO ที่เก็บภายใน */}
+            <ReviewRow
+              label="ผู้ถูกวิเคราะห์"
+              value={`${subject.name || 'ไม่ระบุชื่อ'} · เกิด ${isoToDisplay(subject.birthDate)} ${subject.birthTime} ${placeSummary(subject)}`}
+            />
             <ReviewRow
               label="ฝ่ายองค์กร"
               value={
                 orgMode === 'executive'
-                  ? `ผู้บริหาร ${exec.name || '(ไม่ระบุ)'} · ${exec.birthDate} ${exec.birthTime}`
+                  ? `ผู้บริหาร ${exec.name || '(ไม่ระบุ)'} · ${isoToDisplay(exec.birthDate)} ${exec.birthTime}`
                   : orgMode === 'company-date'
-                    ? `${companyName || 'บริษัท'} · ก่อตั้ง ${foundingDate}`
+                    ? `${companyName || 'บริษัท'} · ก่อตั้ง ${isoToDisplay(foundingDate)}`
                     : `อุตสาหกรรม: ${INDUSTRIES.find((i) => i.id === industryId)?.th ?? '-'}`
               }
             />
@@ -521,17 +538,26 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
 function TeamRoster({ team, setTeam }: { team: BirthValue[]; setTeam: (t: BirthValue[]) => void }) {
   return (
     <div className="mt-8 rounded-lg border border-line bg-paper-warm/40 p-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="font-medium text-ink">Team Roster — วิเคราะห์รวมทั้งทีม</div>
           <div className="text-xs text-ink-soft">5 คนแรกฟรี · คนที่ 6 เป็นต้นไป +16 บาท/คน</div>
         </div>
-        <button
-          onClick={() => setTeam([...team, { ...emptyBirth }])}
-          className="btn-ghost !px-4 !py-2 text-xs"
-        >
-          + เพิ่มสมาชิก
-        </button>
+        <div className="flex gap-2">
+          {/* F-25 ข้อ ข — ทีมที่บันทึกไว้ ดึงมาทั้งชุดได้เลย ไม่ต้องกรอกวันเกิดใหม่ทุกครั้ง */}
+          <SavedTeamPicker
+            onPick={(members) => {
+              const known = new Set(team.map((m) => `${m.name}|${m.birthDate}`))
+              setTeam([...team, ...members.filter((m) => !known.has(`${m.name}|${m.birthDate}`))])
+            }}
+          />
+          <button
+            onClick={() => setTeam([...team, { ...emptyBirth }])}
+            className="btn-ghost !px-4 !py-2 text-xs"
+          >
+            + เพิ่มสมาชิก
+          </button>
+        </div>
       </div>
       {team.length > 0 && (
         <div className="mt-4 space-y-4">

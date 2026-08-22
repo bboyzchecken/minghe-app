@@ -1,20 +1,8 @@
-import { LegalStub } from '@/components/legal-stub'
+import { LegalDocumentView } from '@/components/legal-document'
+import { PRIVACY } from '@/lib/legal'
 
-export const metadata = { title: 'นโยบายความเป็นส่วนตัว (PDPA)' }
+export const metadata = { title: 'นโยบายความเป็นส่วนตัว' }
 
 export default function PrivacyPage() {
-  return (
-    <LegalStub
-      title="นโยบายความเป็นส่วนตัว (PDPA)"
-      cn="隱私權政策"
-      purpose="แจ้งว่าเราเก็บข้อมูลอะไร เพื่อวัตถุประสงค์ใด เก็บนานเท่าไร แบ่งปันกับใคร และผู้ใช้ใช้สิทธิตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคลได้อย่างไร"
-      needs={[
-        'ฐานทางกฎหมายในการเก็บวัน–เวลา–สถานที่เกิด (ถือเป็นข้อมูลส่วนบุคคล)',
-        'กรณีองค์กรกรอกข้อมูลของ candidate — ต้องนิยามว่าใครเป็นผู้ควบคุมข้อมูล และต้องขอความยินยอมจากเจ้าของข้อมูลหรือไม่',
-        'ระยะเวลาเก็บรักษาข้อมูล (retention) และวิธีลบ',
-        'รายชื่อผู้ประมวลผลภายนอก (payment gateway, ผู้ให้บริการอีเมล, ผู้ให้บริการ LLM ถ้ามี)',
-        'ช่องทางใช้สิทธิของเจ้าของข้อมูล และผู้รับผิดชอบ (DPO)',
-      ]}
-    />
-  )
+  return <LegalDocumentView doc={PRIVACY} />
 }

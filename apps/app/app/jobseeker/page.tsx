@@ -36,6 +36,10 @@ export default function JobSeekerIntro() {
           </div>
           <div className="mt-6 text-sm text-ink-soft">
             <b className="text-ink">199 บาท / บริษัท</b> · หรือสมาชิก 399/เดือน (3 บริษัท/สัปดาห์)
+            {' '}
+            <Link href="/pricing/jobseeker" className="whitespace-nowrap text-gold hover:underline">
+              ดูราคาฝั่งคนทำงานทั้งหมด →
+            </Link>
           </div>
         </div>
         <div className="relative">

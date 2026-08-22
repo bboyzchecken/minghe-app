@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { ELEMENT_ORDER } from '@/lib/brand'
 import { ElementIcon } from './element-icon'
+import { Logo } from './logo'
+import { SELLER } from '@/lib/legal'
 
 export function SiteFooter() {
   return (
@@ -8,10 +10,7 @@ export function SiteFooter() {
       <div className="container-page py-12">
         <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
           <div className="max-w-sm">
-            <div className="flex items-baseline gap-2">
-              <span className="cjk text-xl text-gold">命合</span>
-              <span className="font-display-en text-xl font-semibold text-gold">Ming He</span>
-            </div>
+            <Logo variant="lockup" height={38} />
             <p className="mt-3 text-sm text-ink-soft">
               แพลตฟอร์มวิเคราะห์ความสมพงษ์ระหว่างคนกับองค์กรด้วยศาสตร์ปาจือ (八字)
               แม่นยำระดับซินแสตัวจริง — เมื่อ “คนที่ใช่” เจอ “ที่ที่ใช่”
@@ -28,7 +27,8 @@ export function SiteFooter() {
               <ul className="space-y-1.5 text-ink-soft">
                 <li><Link href="/employer" className="hover:text-gold">สำหรับองค์กร</Link></li>
                 <li><Link href="/jobseeker" className="hover:text-gold">สำหรับคนทำงาน</Link></li>
-                <li><Link href="/pricing" className="hover:text-gold">ราคา</Link></li>
+                <li><Link href="/pricing/employer" className="hover:text-gold">ราคา · องค์กร</Link></li>
+                <li><Link href="/pricing/jobseeker" className="hover:text-gold">ราคา · คนทำงาน</Link></li>
               </ul>
             </div>
             <div>
@@ -61,6 +61,17 @@ export function SiteFooter() {
           </div>
         </div>
         <div className="gold-divider my-8" />
+
+        {/* ข้อมูลผู้ขาย — GB Prime Pay บังคับให้แสดงบนเว็บ (Q0-3 / F-01) */}
+        <div className="mb-6 text-xs leading-6 text-muted">
+          <div className="mb-1 font-medium text-ink-soft">ข้อมูลผู้ให้บริการ</div>
+          <div>
+            {SELLER.legalName} · เลขทะเบียน {SELLER.registrationNo}
+          </div>
+          <div>{SELLER.address}</div>
+          <div>ราคาทั้งหมดบนเว็บไซต์เป็นเงินบาท (THB) · ชำระผ่านบัตรเครดิต/เดบิต และ QR PromptPay</div>
+        </div>
+
         <div className="flex flex-col gap-2 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
           <span>© {2026} 命合 Mìnghé · minghe.work</span>
           <span>ข้อมูลประกอบการพิจารณาเชิงโหราศาสตร์จีน ใช้เป็นข้อมูลเสริม ไม่ใช่เกณฑ์ตัดสินเพียงอย่างเดียว</span>

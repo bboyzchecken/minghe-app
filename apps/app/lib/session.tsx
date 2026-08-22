@@ -14,6 +14,8 @@ interface SessionValue {
   /** true จนกว่าจะอ่านเซสชันเดิมจาก localStorage เสร็จ — ใช้กันหน้าจอกะพริบ */
   loading: boolean
   signIn: (email: string, password: string) => Promise<SessionUser>
+  /** เข้าสู่ระบบด้วย Google — รับ ID token จาก Google Identity Services (F-02) */
+  signInWithGoogle: (idToken: string) => Promise<SessionUser>
   /** รับเซสชันที่ได้จากทางอื่น เช่น สมัครสมาชิกสำเร็จ */
   adoptSession: (result: AuthResult) => void
   signOut: () => void
@@ -89,6 +91,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [adoptSession],
   )
 
+  const signInWithGoogle = useCallback(
+    async (idToken: string) => {
+      const result = await client.loginWithGoogle(idToken)
+      adoptSession(result)
+      return result.user
+    },
+    [adoptSession],
+  )
+
   const signOut = useCallback(() => {
     window.localStorage.removeItem(TOKEN_KEY)
     window.localStorage.removeItem(USER_KEY)
@@ -98,8 +109,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient])
 
   const value = useMemo(
-    () => ({ user, token, loading, signIn, adoptSession, signOut }),
-    [user, token, loading, signIn, adoptSession, signOut],
+    () => ({ user, token, loading, signIn, signInWithGoogle, adoptSession, signOut }),
+    [user, token, loading, signIn, signInWithGoogle, adoptSession, signOut],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

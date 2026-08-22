@@ -7,7 +7,8 @@ import { RequireLogin } from '@/components/require-login'
 import { RoleBadge } from '@/components/role-badge'
 import { RoleCapabilities } from '@/components/role-capabilities'
 import type { OrderRecord } from '@/lib/api'
-import { useOrders } from '@/lib/queries'
+import { isoToDisplay } from '@/components/date-input'
+import { useDeleteProfile, useOrders, useSavedProfiles } from '@/lib/queries'
 import { thb } from '@/lib/pricing'
 import { useSession } from '@/lib/session'
 import { saveCurrentOrder } from '@/lib/store'
@@ -112,8 +113,62 @@ function JobSeekerDashboard() {
             </div>
           )}
         </div>
-        {user && <RoleCapabilities user={user} />}
+        <div className="space-y-6">
+          {/* F-25 — ข้อมูลของตัวเองที่ระบบจำไว้ ไม่ต้องกรอกวันเกิดใหม่ทุกครั้งที่เช็กบริษัท */}
+          <MyProfileCard />
+          {user && <RoleCapabilities user={user} />}
+        </div>
       </div>
+    </div>
+  )
+}
+
+function MyProfileCard() {
+  const { data: profiles = [], isPending } = useSavedProfiles('self')
+  const deleteProfile = useDeleteProfile()
+
+  return (
+    <div className="rounded-xl border border-line bg-card p-6 shadow-soft">
+      <h2 className="text-lg">ข้อมูลที่ระบบจำไว้</h2>
+      <p className="mt-2 text-sm text-ink-soft">
+        วัน-เวลา-สถานที่เกิดของคุณถูกบันทึกไว้ตอนเช็กครั้งแรก — ครั้งต่อไปเลือกใช้ซ้ำได้เลย
+      </p>
+
+      {isPending ? (
+        <div className="mt-3 h-14 animate-pulse rounded-lg bg-paper-warm" aria-hidden="true" />
+      ) : profiles.length === 0 ? (
+        <p className="mt-3 rounded-lg border border-dashed border-line bg-paper-warm/40 p-4 text-xs text-muted">
+          ยังไม่มี — เช็กบริษัทแรกแล้วระบบจะจำข้อมูลของคุณไว้ให้เอง
+        </p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {profiles.map((profile) => (
+            <div
+              key={profile.id}
+              className="flex items-center justify-between gap-3 rounded-lg bg-paper-warm/50 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm text-ink">{profile.name}</div>
+                <div className="text-[11px] text-muted">
+                  เกิด {isoToDisplay(profile.birthDate)}
+                  {profile.birthTime ? ` ${profile.birthTime}` : ''}
+                  {profile.placeLabel || profile.province ? ` · ${profile.placeLabel || profile.province}` : ''}
+                </div>
+              </div>
+              <button
+                onClick={() => void deleteProfile.mutateAsync(profile.id).catch(() => undefined)}
+                className="flex-none text-[11px] text-muted hover:text-terracotta hover:underline"
+              >
+                ลบ
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="mt-3 text-[11px] text-muted">
+        ลบได้ตลอดเวลา — ข้อมูลนี้เป็นของคุณ (PDPA)
+      </p>
     </div>
   )
 }

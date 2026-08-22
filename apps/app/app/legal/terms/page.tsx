@@ -1,20 +1,8 @@
-import { LegalStub } from '@/components/legal-stub'
+import { LegalDocumentView } from '@/components/legal-document'
+import { TERMS } from '@/lib/legal'
 
 export const metadata = { title: 'เงื่อนไขการใช้งาน' }
 
 export default function TermsPage() {
-  return (
-    <LegalStub
-      title="เงื่อนไขการใช้งาน"
-      cn="使用條款"
-      purpose="ข้อตกลงระหว่างผู้ใช้กับ Mìnghé ว่าด้วยขอบเขตการให้บริการ สิทธิและหน้าที่ของแต่ละฝ่าย และข้อจำกัดความรับผิด"
-      needs={[
-        'ชื่อนิติบุคคล เลขทะเบียนพาณิชย์ และที่อยู่จดทะเบียน',
-        'ขอบเขตการให้บริการที่รับผิดชอบ (รายงานเป็นข้อมูลประกอบการพิจารณา ไม่ใช่คำแนะนำทางการแพทย์/กฎหมาย/การเงิน)',
-        'เงื่อนไขการระงับหรือปิดบัญชีผู้ใช้',
-        'กฎหมายที่ใช้บังคับและเขตอำนาจศาล',
-        'ผู้ตรวจและอนุมัติเนื้อหา (ทนาย / เจ้าของธุรกิจ)',
-      ]}
-    />
-  )
+  return <LegalDocumentView doc={TERMS} />
 }

@@ -142,6 +142,14 @@ export interface SubjectInput {
   province?: string
   longitude?: number
   lateZiRule?: 'same-day' | 'next-day'
+  /** พิกัดสถานที่เกิดที่แกะจากลิงก์ Google Maps แล้วผู้ใช้ยืนยัน (F-08) */
+  latitude?: number
+  /** ชื่อสถานที่เกิด — แสดงในรายงานแทนชื่อจังหวัดเมื่อมี */
+  placeLabel?: string
+  /** ลิงก์ต้นทาง เก็บไว้ให้ตรวจย้อนได้ว่าพิกัดมาจากไหน */
+  placeUrl?: string
+  /** เขตเวลาของสถานที่เกิด — จำเป็นเมื่อเกิดต่างประเทศ (ไม่ระบุ = ไทย UTC+7) */
+  tzOffsetHours?: number
 }
 
 export interface TeamMemberInput {
@@ -149,6 +157,10 @@ export interface TeamMemberInput {
   birthDate: string
   birthTime?: string
   province?: string
+  longitude?: number
+  latitude?: number
+  placeLabel?: string
+  tzOffsetHours?: number
 }
 
 export type OrgInput =
@@ -158,6 +170,10 @@ export type OrgInput =
       birthDate: string
       birthTime: string
       province?: string
+      longitude?: number
+      latitude?: number
+      placeLabel?: string
+      tzOffsetHours?: number
       team?: TeamMemberInput[]
     }
   | {

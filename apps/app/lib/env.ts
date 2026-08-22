@@ -17,7 +17,10 @@ export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://loc
 )
 
 /**
- * ปุ่ม Google ยังแสดงอยู่เสมอ ค่านี้คุมแค่ว่ากดแล้วทำงานได้ไหม
- * ตอนนี้ตั้งใจปิดไว้ รอ OAuth client จริง (F-02)
+ * ค่าตั้งตอน build ของปุ่ม Google — เป็นแค่ค่าตั้งต้น (F-02)
+ *
+ * แหล่งความจริงจริง ๆ คือ `/mode` ของ API ที่อ่านตอน runtime ผ่าน `useRuntimeConfig()`
+ * เพราะหน้าเว็บเป็น static export: ถ้ายึดค่าตอน build แปลว่าได้ client id มาแล้วต้อง build ใหม่
+ * ค่านี้เหลือไว้ให้หน้าจอมีคำตอบระหว่างที่ยังโหลด `/mode` ไม่เสร็จเท่านั้น
  */
 export const GOOGLE_LOGIN_ENABLED = process.env.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === 'true'

@@ -5,12 +5,19 @@ import type { GenerateReportInput, OrgInput } from '@minghe/report/types'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { BirthFields, Field, Select, TextInput, emptyBirth, type BirthValue } from '@/components/forms'
+import { ProfilePicker } from '@/components/memory-picker'
+import { placeFields } from '@/lib/place'
 import { ConsentCheckbox } from '@/components/consent-checkbox'
 import { DateInput } from '@/components/date-input'
 import { ElementIcon } from '@/components/element-icon'
 import { Stepper, type StepDef } from '@/components/stepper'
 import { ELEMENT_META } from '@/lib/brand'
-import { thb } from '@/lib/pricing'
+import {
+  JOBSEEKER_PAY_PER_VIEW_PRICE,
+  JOBSEEKER_PLAN_PRICE,
+  JOBSEEKER_WEEKLY_QUOTA,
+  thb,
+} from '@/lib/pricing'
 import { useCreateOrder } from '@/lib/queries'
 import { rememberReturnTo, useSession } from '@/lib/session'
 import { clearWizardDraft, loadWizardDraft, saveCurrentOrder, saveWizardDraft } from '@/lib/store'
@@ -81,11 +88,16 @@ export default function JobSeekerWizard() {
   const companyOk = companyMode === 'company-date' ? foundingDate !== '' : industryId !== ''
   const canNext = step === 0 ? meOk : step === 1 ? companyOk : true
 
-  const total = billing === 'payperview' ? 199 : 399
+  const total = billing === 'payperview' ? JOBSEEKER_PAY_PER_VIEW_PRICE : JOBSEEKER_PLAN_PRICE
   const priceLines: PriceLine[] =
     billing === 'payperview'
-      ? [{ label: 'เช็กความสมพงษ์ 1 บริษัท (Pay-per-view)', amount: 199 }]
-      : [{ label: 'สมาชิกรายเดือน (3 บริษัท/สัปดาห์)', amount: 399 }]
+      ? [{ label: 'เช็กความสมพงษ์ 1 บริษัท (Pay-per-view)', amount: JOBSEEKER_PAY_PER_VIEW_PRICE }]
+      : [
+          {
+            label: `สมาชิกรายเดือน (${JOBSEEKER_WEEKLY_QUOTA} บริษัท/สัปดาห์)`,
+            amount: JOBSEEKER_PLAN_PRICE,
+          },
+        ]
 
   function buildInput(): GenerateReportInput {
     let org: OrgInput
@@ -100,7 +112,7 @@ export default function JobSeekerWizard() {
         gender: me.gender || undefined,
         birthDate: me.birthDate,
         birthTime: me.birthTime,
-        province: me.province || undefined,
+        ...placeFields(me),
       },
       org,
       targetYear: 2026,
@@ -170,6 +182,8 @@ export default function JobSeekerWizard() {
           <div className="fade-up">
             <h2 className="text-2xl">ข้อมูลวันเกิดของคุณ</h2>
             <p className="mb-6 mt-1 text-sm text-ink-soft">ใช้ตั้งเสาสี่ต้นของคุณ เพื่อเทียบกับพลังงานของบริษัท</p>
+            {/* F-25 — เคยเช็กแล้วไม่ต้องกรอกวันเกิดใหม่ */}
+            <ProfilePicker label="ใช้ข้อมูลที่เคยกรอกไว้" kind="self" onPick={(v) => setMe({ ...me, ...v })} />
             <BirthFields value={me} onChange={setMe} nameLabel="ชื่อของคุณ" />
           </div>
         )}
@@ -249,7 +263,7 @@ export default function JobSeekerWizard() {
                 className={`rounded-lg border p-5 text-left transition ${billing === 'payperview' ? 'border-gold bg-gold/[0.06]' : 'border-line bg-cloud hover:border-gold/40'}`}
               >
                 <div className="font-medium text-ink">Pay-per-view</div>
-                <div className="mt-1 text-2xl font-semibold text-gold">199 ฿</div>
+                <div className="mt-1 text-2xl font-semibold text-gold">{thb(JOBSEEKER_PAY_PER_VIEW_PRICE)} ฿</div>
                 <div className="text-xs text-ink-soft">เช็ก 1 บริษัท จ่ายครั้งเดียว</div>
               </button>
               <button
@@ -259,8 +273,10 @@ export default function JobSeekerWizard() {
                 <div className="flex items-center gap-2 font-medium text-ink">
                   รายเดือน <span className="chip !py-0.5 text-[10px]">คุ้มกว่า</span>
                 </div>
-                <div className="mt-1 text-2xl font-semibold text-gold">399 ฿<span className="text-sm text-muted">/เดือน</span></div>
-                <div className="text-xs text-ink-soft">เช็กได้ 3 บริษัท/สัปดาห์</div>
+                <div className="mt-1 text-2xl font-semibold text-gold">
+                  {thb(JOBSEEKER_PLAN_PRICE)} ฿<span className="text-sm text-muted">/เดือน</span>
+                </div>
+                <div className="text-xs text-ink-soft">เช็กได้ {JOBSEEKER_WEEKLY_QUOTA} บริษัท/สัปดาห์</div>
               </button>
             </div>
 
