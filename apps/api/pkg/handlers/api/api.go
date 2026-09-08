@@ -106,6 +106,9 @@ func (s *Server) Start() error {
 	/* ── funnel event (สาธารณะ) — สถิติ "ลองเล่นแล้วไปสะดุดตรงไหน" ─ */
 	e.POST("/events", s.TrackEvent, s.OptionalJwt())
 
+	/* รหัสเข้าใช้รอบ UAT — ด่านปลดล็อกแทนการชำระเงิน (กรอกได้ก่อนล็อกอิน) */
+	e.POST("/access-codes/redeem", s.RedeemAccessCode, s.OptionalJwt())
+
 	/* ── แกะลิงก์ Google Maps (สาธารณะ) — F-08 ──────────── */
 	// ต้องเรียกได้ก่อนล็อกอิน เพราะผู้ใช้กรอกฟอร์มได้ก่อนสมัคร (F-03)
 	e.POST("/geo/resolve", s.ResolvePlace)
@@ -169,7 +172,11 @@ func (s *Server) Start() error {
 	admin.GET("/payments", s.AdminListPayments)              // Bill & Payment ทุกราย
 	admin.POST("/payments/:id/refund", s.AdminRefundPayment) // บันทึกคืนเงิน
 	admin.GET("/credits", s.AdminListCredits)                // สิทธิ์ทดลองที่เคยให้
-	admin.POST("/users/:id/credits", s.AdminGrantCredit)     // ให้สิทธิ์ทดลอง (ลูกค้าทักไลน์)
+	admin.GET("/access-codes", s.AdminListAccessCodes)       // รหัสเข้าใช้ทั้งหมด (กรองด้วย ?prefix=)
+	admin.POST("/access-codes", s.AdminIssueAccessCodes)     // ออกรหัสเป็นชุดจาก prefix ที่ตั้งเอง
+	admin.POST("/access-codes/:id/revoke", s.AdminRevokeAccessCode)
+	admin.GET("/access-codes/:code/timeline", s.AdminAccessCodeTimeline) // ย้อนดูรายคน
+	admin.POST("/users/:id/credits", s.AdminGrantCredit)                 // ให้สิทธิ์ทดลอง (ลูกค้าทักไลน์)
 	admin.DELETE("/credits/:id", s.AdminRevokeCredit)
 	admin.POST("/legal", s.AdminUpsertLegalDocument)
 

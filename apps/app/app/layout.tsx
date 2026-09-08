@@ -5,6 +5,7 @@ import { ModeBanner } from '@/components/mode-banner'
 import { Providers } from '@/components/providers'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
+import { AccessCodeCapture } from '@/components/access-code-capture'
 
 const trirong = Trirong({
   subsets: ['thai', 'latin'],
@@ -57,6 +58,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <Providers>
           <ModeBanner />
+          {/* รับรหัสเข้าใช้จากลิงก์ ?code= ตั้งแต่หน้าแรก (รอบ UAT) */}
+          <AccessCodeCapture />
           <SiteHeader />
           <main>{children}</main>
           <SiteFooter />

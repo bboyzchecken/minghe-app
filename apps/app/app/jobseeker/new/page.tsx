@@ -20,6 +20,7 @@ import {
 } from '@/lib/pricing'
 import { useCreateOrder } from '@/lib/queries'
 import { CreditNotice, useApplicableCredit } from '@/components/credit-notice'
+import { AccessCodeCard } from '@/components/access-code-card'
 import { rememberReturnTo, useSession } from '@/lib/session'
 import { anonId, track } from '@/lib/track'
 import { clearWizardDraft, loadWizardDraft, saveCurrentOrder, saveWizardDraft } from '@/lib/store'
@@ -69,6 +70,8 @@ export default function JobSeekerWizard() {
   const [size, setSize] = useState('')
   const [billing, setBilling] = useState<'payperview' | 'subscription'>('payperview')
   const [consented, setConsented] = useState(false)
+  /** รอบ UAT — ต้องมีรหัสเข้าใช้ก่อนจึงจะเปิดรายงานได้ */
+  const [accessReady, setAccessReady] = useState(false)
 
   // กู้ร่างที่กรอกค้างไว้ กรณีถูกพาไปหน้าล็อกอินกลางคัน (F-03)
   useEffect(() => {
@@ -329,6 +332,9 @@ export default function JobSeekerWizard() {
                 </div>
                 <CreditNotice credit={credit} skip={skipCredit} onSkipChange={setSkipCredit} />
 
+                {/* รอบ UAT — ปลดล็อกด้วยรหัสเข้าใช้แทนเกตเวย์ชำระเงิน */}
+                <AccessCodeCard onReady={setAccessReady} />
+
                 {/* F-06 — กล่องยินยอมต้องถูกติ๊กก่อนจึงจะชำระเงินได้ */}
                 <ConsentCheckbox checked={consented} onChange={setConsented} />
 
@@ -340,16 +346,20 @@ export default function JobSeekerWizard() {
 
                 <button
                   onClick={() => void confirm()}
-                  disabled={!consented}
+                  disabled={!consented || !accessReady}
                   className="btn-primary mt-4 w-full py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {payable === 0 ? 'ใช้สิทธิ์ทดลอง (0 บาท) และดูผล' : `ยืนยันชำระ ${thb(total)} บาท และดูผล`}
                 </button>
-                {!consented && (
+                {!accessReady ? (
                   <p className="mt-3 text-center text-xs text-muted">
-                    กรุณาติ๊กยอมรับเงื่อนไขก่อนดำเนินการชำระเงิน
+                    ต้องกรอกรหัสเข้าใช้ก่อนจึงจะเปิดรายงานได้ในรอบทดสอบนี้
                   </p>
-                )}
+                ) : !consented ? (
+                  <p className="mt-3 text-center text-xs text-muted">
+                    กรุณาติ๊กยอมรับเงื่อนไขก่อนดำเนินการต่อ
+                  </p>
+                ) : null}
               </>
             )}
           </div>

@@ -283,6 +283,20 @@ func runMigrations(db *gorm.DB) error {
 				return tx.Migrator().DropTable("funnel_events", "user_credits", "payments")
 			},
 		},
+		{
+			// รหัสเข้าใช้รอบ UAT — ด่านปลดล็อกรายงานแทนเกตเวย์ชำระเงิน
+			// และเพิ่มคอลัมน์ code ใน funnel_events เพื่อย้อนดูเส้นทางรายคนได้
+			ID: "20260908_access_codes",
+			Migrate: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&models.AccessCode{}, &models.AccessCodeRedemption{}, &models.FunnelEvent{})
+			},
+			Rollback: func(tx *gorm.DB) error {
+				if err := tx.Migrator().DropColumn(&models.FunnelEvent{}, "code"); err != nil {
+					return err
+				}
+				return tx.Migrator().DropTable("access_code_redemptions", "access_codes")
+			},
+		},
 	})
 	return m.Migrate()
 }

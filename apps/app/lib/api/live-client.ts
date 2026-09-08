@@ -16,6 +16,8 @@ import { isoToDisplay } from '@/components/date-input'
 import { API_BASE_URL } from '@/lib/env'
 import {
   ClientError,
+  type AccessCodeRow,
+  type AccessCodeTimeline,
   type AdminLegalDoc,
   type AdminOrder,
   type AdminOrderStatus,
@@ -35,6 +37,7 @@ import {
   type OrgRole,
   type OtpChallenge,
   type ProfileKind,
+  type RedeemAccessCodeResult,
   type RegisterInput,
   type ResetPasswordInput,
   type ResolvedPlace,
@@ -141,6 +144,47 @@ function toPayment(p: ApiPayment): PaymentRecord {
     refundedBy: p.refunded_by_name ?? '',
     refundedAt: p.refunded_at,
     paidAt: p.paid_at,
+  }
+}
+
+/* ── รหัสเข้าใช้รอบ UAT ────────────────────────────────── */
+
+interface ApiRedeemResult {
+  ok: boolean
+  status: 'ok' | 'not_found' | 'expired' | 'revoked' | 'exhausted'
+  reason?: string
+  code?: string
+  prefix?: string
+  label?: string
+  used_count?: number
+  max_uses?: number
+}
+
+interface ApiAccessCode {
+  id: number
+  code: string
+  prefix: string
+  seq: number
+  label: string
+  max_uses: number
+  used_count: number
+  expires_at: string | null
+  revoked_at: string | null
+  created_at: string
+}
+
+function toAccessCode(a: ApiAccessCode): AccessCodeRow {
+  return {
+    id: a.id,
+    code: a.code,
+    prefix: a.prefix,
+    seq: a.seq,
+    label: a.label ?? '',
+    maxUses: a.max_uses,
+    usedCount: a.used_count,
+    expiresAt: a.expires_at,
+    revokedAt: a.revoked_at,
+    createdAt: a.created_at,
   }
 }
 
@@ -905,12 +949,82 @@ export const liveClient: MingheClient = {
     return (res.data ?? []).map(toCredit)
   },
 
+  async redeemAccessCode(code, anonId, token): Promise<RedeemAccessCodeResult> {
+    const res = await call<{ data: ApiRedeemResult }>('/access-codes/redeem', {
+      method: 'POST',
+      token: token ?? undefined,
+      body: { code, anon_id: anonId },
+    })
+    const d = res.data
+    return {
+      ok: d.ok,
+      status: d.status,
+      reason: d.reason,
+      code: d.code,
+      prefix: d.prefix,
+      label: d.label,
+      usedCount: d.used_count,
+      maxUses: d.max_uses,
+    }
+  },
+
+  async adminListAccessCodes(token, prefix): Promise<AccessCodeRow[]> {
+    const qs = prefix ? `?prefix=${encodeURIComponent(prefix)}` : ''
+    const res = await call<{ data: ApiAccessCode[] | null }>(`/admin/access-codes${qs}`, { token })
+    return (res.data ?? []).map(toAccessCode)
+  },
+
+  async adminIssueAccessCodes(token, input): Promise<AccessCodeRow[]> {
+    const res = await call<{ data: ApiAccessCode[] | null }>('/admin/access-codes', {
+      method: 'POST',
+      token,
+      body: {
+        prefix: input.prefix,
+        count: input.count,
+        max_uses: input.maxUses ?? 0,
+        expires_at: input.expiresAt ?? '',
+        labels: input.labels ?? [],
+      },
+    })
+    return (res.data ?? []).map(toAccessCode)
+  },
+
+  async adminRevokeAccessCode(token, id): Promise<void> {
+    await call(`/admin/access-codes/${id}/revoke`, { method: 'POST', token })
+  },
+
+  async adminAccessCodeTimeline(token, code): Promise<AccessCodeTimeline> {
+    const res = await call<{
+      data: {
+        code: string
+        redemptions: { anon_id: string; created_at: string }[] | null
+        events: { step: string; step_index: number; product: 'employer' | 'jobseeker'; created_at: string }[] | null
+      }
+    }>(`/admin/access-codes/${encodeURIComponent(code)}/timeline`, { token })
+    return {
+      code: res.data.code,
+      redemptions: (res.data.redemptions ?? []).map((r) => ({ anonId: r.anon_id, at: r.created_at })),
+      events: (res.data.events ?? []).map((e) => ({
+        step: e.step,
+        stepIndex: e.step_index,
+        product: e.product,
+        at: e.created_at,
+      })),
+    }
+  },
+
   async trackEvent(input: TrackEventInput, token) {
     try {
       await call('/events', {
         method: 'POST',
         token: token ?? undefined,
-        body: { anon_id: input.anonId, product: input.product, step: input.step, step_index: input.stepIndex },
+        body: {
+          anon_id: input.anonId,
+          product: input.product,
+          step: input.step,
+          step_index: input.stepIndex,
+          code: input.code ?? '',
+        },
       })
     } catch {
       /* สถิติหายหนึ่งจุด ไม่ทำให้ผู้ใช้สะดุด */

@@ -11,6 +11,7 @@
  */
 
 import { client } from '@/lib/api'
+import { readUatCode } from '@/lib/access-code'
 
 const ANON_KEY = 'minghe:anon'
 
@@ -40,7 +41,10 @@ export function track(
   const key = `${product}:${step}`
   if (sent.has(key)) return
   sent.add(key)
-  void client.trackEvent({ anonId: anonId(), product, step, stepIndex }, token ?? null)
+  void client.trackEvent(
+    { anonId: anonId(), product, step, stepIndex, code: readUatCode() },
+    token ?? null,
+  )
 }
 
 /** ชื่อขั้นที่อ่านได้ — ใช้ในหน้าแอดมิน */

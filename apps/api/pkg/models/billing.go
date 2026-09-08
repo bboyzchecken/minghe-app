@@ -113,12 +113,14 @@ func (c UserCredit) Usable(product string, now time.Time) bool {
 // ใช้ตอบคำถาม "คนที่ลองเล่นแต่ไม่จ่าย ไปสะดุดตรงไหน" — เก็บแค่ชื่อขั้นกับเวลา
 // ไม่เก็บเนื้อหาที่กรอก (PDPA) · ผู้ใช้ที่ยังไม่ล็อกอินระบุด้วย anon_id ที่หน้าเว็บสุ่มไว้
 type FunnelEvent struct {
-	ID        uint      `gorm:"primarykey" json:"id"`
-	AnonID    string    `gorm:"size:64;index" json:"anon_id"`
-	UserID    *uint     `gorm:"index" json:"user_id"`
-	Product   string    `gorm:"size:16;index" json:"product"`
-	Step      string    `gorm:"size:48;index" json:"step"` // wizard_start, step_1..n, checkout_view, login_gate, paid
-	StepIndex int       `json:"step_index"`
+	ID        uint   `gorm:"primarykey" json:"id"`
+	AnonID    string `gorm:"size:64;index" json:"anon_id"`
+	UserID    *uint  `gorm:"index" json:"user_id"`
+	Product   string `gorm:"size:16;index" json:"product"`
+	Step      string `gorm:"size:48;index" json:"step"` // wizard_start, step_1..n, checkout_view, login_gate, paid
+	StepIndex int    `json:"step_index"`
+	// รหัสเข้าใช้ของผู้ทดสอบ (รอบ UAT) — ผูกตั้งแต่ก่อนล็อกอิน จึงย้อนดูรายคนได้ทั้งเส้นทาง
+	Code      string    `gorm:"size:64;index" json:"code"`
 	CreatedAt time.Time `gorm:"index" json:"created_at"`
 }
 
@@ -182,4 +184,7 @@ type BillingStore interface {
 
 	// Series สรุปตัวเลขตามช่วงเวลา granularity = day | month | year
 	Series(granularity string, from, to time.Time) ([]StatsBucket, error)
+
+	// รหัสเข้าใช้รอบ UAT — ด่านปลดล็อกแทนการชำระเงิน (ดู access_code.go)
+	AccessCodeStore
 }

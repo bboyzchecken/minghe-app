@@ -14,6 +14,8 @@ import { generateAccessCode } from '@/lib/access-code'
 import { MOCK_ACCOUNTS, DEMO_ORG_NAME } from './mock-accounts'
 import {
   ClientError,
+  type AccessCodeRow,
+  type AccessCodeTimeline,
   type AdminLegalDoc,
   type AdminOrder,
   type AdminOverview,
@@ -38,6 +40,7 @@ import {
   type OrgRole,
   type OtpChallenge,
   type ProfileKind,
+  type RedeemAccessCodeResult,
   type RegisterInput,
   type ResetPasswordInput,
   type ResolvedPlace,
@@ -61,6 +64,8 @@ const PROFILE_META_KEY = 'minghe:mock:profileMeta'
 const REFUNDS_KEY = 'minghe:mock:refunds'
 const CREDITS_KEY = 'minghe:mock:credits'
 const EVENTS_KEY = 'minghe:mock:events'
+const ACCESS_CODES_KEY = 'minghe:mock:accessCodes'
+const REDEMPTIONS_KEY = 'minghe:mock:accessCodeRedemptions'
 const OTP_PREFIX = 'minghe:mock:otp:'
 const TOKEN_PREFIX = 'mock-token:'
 
@@ -422,6 +427,8 @@ interface StoredEvent {
   product: 'employer' | 'jobseeker'
   step: string
   stepIndex: number
+  /** รหัสเข้าใช้รอบ UAT — ว่างได้เมื่อผู้ใช้เข้ามาโดยไม่มีรหัส */
+  code?: string
   at: string
 }
 
@@ -435,6 +442,61 @@ function readCredits(): StoredCredit[] {
 
 function readEvents(): StoredEvent[] {
   return readJSON<StoredEvent[]>(EVENTS_KEY, [])
+}
+
+/* ── รหัสเข้าใช้รอบ UAT ────────────────────────────────── */
+
+interface StoredAccessCode {
+  id: number
+  code: string
+  prefix: string
+  seq: number
+  label: string
+  maxUses: number
+  usedCount: number
+  expiresAt: string | null
+  revokedAt: string | null
+  createdAt: string
+}
+
+interface StoredRedemption {
+  code: string
+  anonId: string
+  at: string
+}
+
+/**
+ * ชุดรหัสตั้งต้นของโหมดสาธิต — มีไว้ให้ลองโฟลว์ได้โดยไม่ต้องมีแอดมินออกรหัสก่อน
+ * ใช้ prefix เดียวกับตัวอย่างในแผน เพื่อให้เอกสารกับของจริงตรงกัน
+ */
+const DEMO_ACCESS_PREFIX = 'G1S1-2026'
+
+function seedAccessCodes(): StoredAccessCode[] {
+  const now = new Date().toISOString()
+  return Array.from({ length: 10 }, (_, i) => ({
+    id: i + 1,
+    code: `${DEMO_ACCESS_PREFIX}-${String(i + 1).padStart(2, '0')}`,
+    prefix: DEMO_ACCESS_PREFIX,
+    seq: i + 1,
+    label: '',
+    maxUses: 0,
+    usedCount: 0,
+    expiresAt: null,
+    revokedAt: null,
+    createdAt: now,
+  }))
+}
+
+function readAccessCodes(): StoredAccessCode[] {
+  const rows = readJSON<StoredAccessCode[]>(ACCESS_CODES_KEY, [])
+  if (rows.length > 0) return rows
+  const seeded = seedAccessCodes()
+  writeJSON(ACCESS_CODES_KEY, seeded)
+  return seeded
+}
+
+function normalizeCode(value: string): string {
+  return value.trim().toUpperCase()
 }
 
 /** เลขใบเสร็จจำลอง — คงที่ต่อรหัสคำสั่งซื้อ (ออกใหม่ทุกครั้งไม่ได้ ใบเสร็จต้องนิ่ง) */
@@ -1435,6 +1497,92 @@ export const mockClient: MingheClient = {
     return readCredits().filter((c) => c.userId === email)
   },
 
+  async redeemAccessCode(code, anonId, token): Promise<RedeemAccessCodeResult> {
+    const normalized = normalizeCode(code)
+    const rows = readAccessCodes()
+    const row = rows.find((r) => r.code === normalized)
+    if (!row) return { ok: false, status: 'not_found', reason: 'ไม่พบรหัสนี้ในระบบ — ตรวจตัวสะกดอีกครั้ง' }
+    if (row.revokedAt) return { ok: false, status: 'revoked', reason: 'รหัสนี้ถูกยกเลิกแล้ว' }
+    if (row.expiresAt && new Date(row.expiresAt) < new Date()) {
+      return { ok: false, status: 'expired', reason: 'รหัสนี้หมดอายุแล้ว' }
+    }
+    if (row.maxUses > 0 && row.usedCount >= row.maxUses) {
+      return { ok: false, status: 'exhausted', reason: 'รหัสนี้ใช้ครบจำนวนที่กำหนดไว้แล้ว' }
+    }
+
+    row.usedCount += 1
+    writeJSON(ACCESS_CODES_KEY, rows)
+    writeJSON(REDEMPTIONS_KEY, [
+      ...readJSON<StoredRedemption[]>(REDEMPTIONS_KEY, []).slice(-499),
+      { code: row.code, anonId, at: new Date().toISOString() },
+    ])
+    void token
+    return {
+      ok: true,
+      status: 'ok',
+      code: row.code,
+      prefix: row.prefix,
+      label: row.label,
+      usedCount: row.usedCount,
+      maxUses: row.maxUses,
+    }
+  },
+
+  async adminListAccessCodes(token, prefix): Promise<AccessCodeRow[]> {
+    requireAdmin(token)
+    const rows = readAccessCodes()
+    const p = prefix ? normalizeCode(prefix) : ''
+    return rows.filter((r) => !p || r.prefix === p)
+  },
+
+  async adminIssueAccessCodes(token, input): Promise<AccessCodeRow[]> {
+    requireAdmin(token)
+    const prefix = normalizeCode(input.prefix)
+    if (!prefix) throw new ClientError('ต้องระบุ prefix ของกลุ่ม')
+    const rows = readAccessCodes()
+    const maxSeq = rows.filter((r) => r.prefix === prefix).reduce((m, r) => Math.max(m, r.seq), 0)
+    const maxId = rows.reduce((m, r) => Math.max(m, r.id), 0)
+    const now = new Date().toISOString()
+
+    const created: StoredAccessCode[] = Array.from({ length: input.count }, (_, i) => ({
+      id: maxId + i + 1,
+      code: `${prefix}-${String(maxSeq + i + 1).padStart(2, '0')}`,
+      prefix,
+      seq: maxSeq + i + 1,
+      label: input.labels?.[i]?.trim() ?? '',
+      maxUses: input.maxUses ?? 0,
+      usedCount: 0,
+      expiresAt: input.expiresAt ? `${input.expiresAt}T23:59:59.000Z` : null,
+      revokedAt: null,
+      createdAt: now,
+    }))
+    writeJSON(ACCESS_CODES_KEY, [...rows, ...created])
+    return created
+  },
+
+  async adminRevokeAccessCode(token, id): Promise<void> {
+    requireAdmin(token)
+    const rows = readAccessCodes()
+    const row = rows.find((r) => r.id === id)
+    if (!row) throw new ClientError('ไม่พบรหัสนี้')
+    row.revokedAt = new Date().toISOString()
+    writeJSON(ACCESS_CODES_KEY, rows)
+  },
+
+  async adminAccessCodeTimeline(token, code): Promise<AccessCodeTimeline> {
+    requireAdmin(token)
+    const normalized = normalizeCode(code)
+    return {
+      code: normalized,
+      redemptions: readJSON<StoredRedemption[]>(REDEMPTIONS_KEY, [])
+        .filter((r) => r.code === normalized)
+        .map((r) => ({ anonId: r.anonId, at: r.at })),
+      events: readEvents()
+        .filter((e) => e.code === normalized)
+        .map((e) => ({ step: e.step, stepIndex: e.stepIndex, product: e.product, at: e.at })),
+    }
+  },
+
   async trackEvent(input, token) {
     let userEmail: string | null = null
     try {
@@ -1444,7 +1592,15 @@ export const mockClient: MingheClient = {
     }
     writeJSON(EVENTS_KEY, [
       ...readEvents().slice(-1999),
-      { anonId: input.anonId, userEmail, product: input.product, step: input.step, stepIndex: input.stepIndex, at: new Date().toISOString() },
+      {
+        anonId: input.anonId,
+        userEmail,
+        product: input.product,
+        step: input.step,
+        stepIndex: input.stepIndex,
+        code: input.code ? normalizeCode(input.code) : '',
+        at: new Date().toISOString(),
+      },
     ])
   },
 

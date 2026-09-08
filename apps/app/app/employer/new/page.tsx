@@ -9,6 +9,7 @@ import { ProfilePicker, SavedTeamPicker } from '@/components/memory-picker'
 import { placeFields, placeSummary } from '@/lib/place'
 import { ConsentCheckbox } from '@/components/consent-checkbox'
 import { CreditNotice, useApplicableCredit } from '@/components/credit-notice'
+import { AccessCodeCard } from '@/components/access-code-card'
 import { DateInput, isoToDisplay } from '@/components/date-input'
 import { ElementIcon } from '@/components/element-icon'
 import { Stepper, type StepDef } from '@/components/stepper'
@@ -68,6 +69,8 @@ export default function EmployerWizard() {
   const [team, setTeam] = useState<BirthValue[]>([])
 
   const [consented, setConsented] = useState(false)
+  /** รอบ UAT — ต้องมีรหัสเข้าใช้ก่อนจึงจะเปิดรายงานได้ */
+  const [accessReady, setAccessReady] = useState(false)
   const [skipCredit, setSkipCredit] = useState(false)
   const [depth, setDepth] = useState<'standard' | 'premium' | 'executive'>('premium')
   const [speed, setSpeed] = useState<'standard' | 'express'>('standard')
@@ -442,6 +445,9 @@ export default function EmployerWizard() {
                 </div>
                 <CreditNotice credit={credit} skip={skipCredit} onSkipChange={setSkipCredit} />
 
+                {/* รอบ UAT — ปลดล็อกด้วยรหัสเข้าใช้แทนเกตเวย์ชำระเงิน */}
+                <AccessCodeCard onReady={setAccessReady} />
+
                 {/* F-06 — กล่องยินยอมต้องถูกติ๊กก่อนจึงจะชำระเงินได้ */}
                 <ConsentCheckbox checked={consented} onChange={setConsented} />
 
@@ -453,16 +459,20 @@ export default function EmployerWizard() {
 
                 <button
                   onClick={() => void confirmPayment()}
-                  disabled={!consented}
+                  disabled={!consented || !accessReady}
                   className="btn-primary mt-4 w-full py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {payable === 0 ? 'ใช้สิทธิ์ทดลอง (0 บาท) และเริ่มวิเคราะห์' : `ยืนยันชำระ ${thb(total)} บาท และเริ่มวิเคราะห์`}
                 </button>
-                {!consented && (
+                {!accessReady ? (
                   <p className="mt-3 text-center text-xs text-muted">
-                    กรุณาติ๊กยอมรับเงื่อนไขก่อนดำเนินการชำระเงิน
+                    ต้องกรอกรหัสเข้าใช้ก่อนจึงจะเปิดรายงานได้ในรอบทดสอบนี้
                   </p>
-                )}
+                ) : !consented ? (
+                  <p className="mt-3 text-center text-xs text-muted">
+                    กรุณาติ๊กยอมรับเงื่อนไขก่อนดำเนินการต่อ
+                  </p>
+                ) : null}
               </>
             )}
           </StepShell>

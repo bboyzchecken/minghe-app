@@ -280,6 +280,59 @@ export interface TrackEventInput {
   product: 'employer' | 'jobseeker'
   step: string
   stepIndex: number
+  /** รหัสเข้าใช้รอบ UAT — แนบไปทุก event เพื่อย้อนดูเส้นทางรายคนได้ */
+  code?: string | null
+}
+
+/* ── รหัสเข้าใช้รอบ UAT ────────────────────────────────── */
+
+export type AccessCodeStatus = 'ok' | 'not_found' | 'expired' | 'revoked' | 'exhausted'
+
+export interface RedeemAccessCodeResult {
+  ok: boolean
+  status: AccessCodeStatus
+  /** เหตุผลเป็นภาษาไทยเมื่อใช้ไม่ได้ */
+  reason?: string
+  code?: string
+  prefix?: string
+  label?: string
+  usedCount?: number
+  maxUses?: number
+}
+
+export interface AccessCodeRow {
+  id: number
+  code: string
+  prefix: string
+  seq: number
+  label: string
+  maxUses: number
+  usedCount: number
+  expiresAt: string | null
+  revokedAt: string | null
+  createdAt: string
+}
+
+export interface IssueAccessCodesInput {
+  prefix: string
+  count: number
+  maxUses?: number
+  /** 'YYYY-MM-DD' — ว่าง = ไม่มีวันหมดอายุ */
+  expiresAt?: string
+  labels?: string[]
+}
+
+export interface AccessCodeTimelineEvent {
+  step: string
+  stepIndex: number
+  product: 'employer' | 'jobseeker'
+  at: string
+}
+
+export interface AccessCodeTimeline {
+  code: string
+  redemptions: { anonId: string; at: string }[]
+  events: AccessCodeTimelineEvent[]
 }
 
 export interface UpdateMeInput {
@@ -464,6 +517,13 @@ export interface MingheClient {
   listMyCredits(token: string): Promise<UserCredit[]>
   /** ส่งจุดที่ผู้ใช้เดินถึงใน wizard — ไม่ throw เด็ดขาด (สถิติห้ามทำให้โฟลว์พัง) */
   trackEvent(input: TrackEventInput, token?: string | null): Promise<void>
+
+  /* รหัสเข้าใช้รอบ UAT — ด่านปลดล็อกแทนการชำระเงิน */
+  redeemAccessCode(code: string, anonId: string, token?: string | null): Promise<RedeemAccessCodeResult>
+  adminListAccessCodes(token: string, prefix?: string): Promise<AccessCodeRow[]>
+  adminIssueAccessCodes(token: string, input: IssueAccessCodesInput): Promise<AccessCodeRow[]>
+  adminRevokeAccessCode(token: string, id: number): Promise<void>
+  adminAccessCodeTimeline(token: string, code: string): Promise<AccessCodeTimeline>
   adminStats(token: string, granularity: StatsGranularity, range?: { from?: string; to?: string }): Promise<AdminStats>
   adminListPayments(token: string, filter?: { product?: string; status?: string; search?: string }): Promise<PaymentRecord[]>
   adminRefundPayment(token: string, id: string, input: RefundInput): Promise<void>

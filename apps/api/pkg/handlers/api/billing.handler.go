@@ -12,6 +12,7 @@ import (
 	"github.com/minghe/api/pkg/logger"
 	"github.com/minghe/api/pkg/models"
 	"github.com/minghe/api/pkg/store"
+	"github.com/minghe/api/pkg/store/billing"
 )
 
 /* ── ใบเสร็จ / ประวัติการชำระเงิน (ฝั่งผู้ใช้) ─────────────── */
@@ -82,6 +83,8 @@ type trackEventBody struct {
 	Product   string `json:"product" validate:"required,oneof=employer jobseeker"`
 	Step      string `json:"step" validate:"required,max=48"`
 	StepIndex int    `json:"step_index"`
+	// รหัสเข้าใช้รอบ UAT — ไม่บังคับ เพราะโฟลว์ปกติหลัง UAT ไม่มีรหัส
+	Code string `json:"code" validate:"max=64"`
 }
 
 func (s *Server) TrackEvent(c echo.Context) error {
@@ -98,6 +101,7 @@ func (s *Server) TrackEvent(c echo.Context) error {
 		Product:   body.Product,
 		Step:      body.Step,
 		StepIndex: body.StepIndex,
+		Code:      billing.NormalizeAccessCode(body.Code),
 	}
 	if uid := CurrentUserID(c); uid != 0 {
 		ev.UserID = &uid
