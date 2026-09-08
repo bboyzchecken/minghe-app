@@ -73,7 +73,7 @@
 - [ ] **TC_UI_001** — Evidence Layer panel ยังไม่มี
 - [ ] **TC_LLM_001** — reasoning 19 ขั้นยังไม่มี (`llm.ts` ทำแค่ขัดเงาภาษา) — dev plan ระบุเองว่าไม่ลงรอบนี้
 - [ ] **TC_LLM_002** — **ยังไม่มีไฟล์ `soul.md` ใน repo**
-- [ ] **TC_PAY_001** — GB Prime Pay ยังไม่เชื่อม (`PAYMENT_PROVIDER=mock` · สถานะ `pending_gateway`) → UAT ใช้โหมด mock
+- [ ] **TC_PAY_001 — เปลี่ยนโจทย์แล้ว** รอบนี้ไม่ใช้เกตเวย์ ใช้ **access code** แทน → ดู [แผน access code](plan-access-code-tracking.md) · เคสเดิมของ GB Prime Pay ยกไปหลัง UAT
 - [ ] **TC_SEC_001** — ยังไม่มีการเข้ารหัสข้อมูลเกิด (grep `aes|encrypt` ทั้ง repo = 0 จุด · [profile.go:35–48](../apps/api/pkg/models/profile.go#L35) เก็บเป็น plaintext) → **ข้อนี้ควรยกให้เป็นงานบังคับก่อน public launch**
 - [ ] อื่น ๆ ที่ต้องแจ้ง: เดือนจร/กราฟจังหวะยังไม่มี · ตาราง "จุดที่ควรบริหาร" ยังเป็นโครงเปล่ารอกฎจาก อ.เม · โหงวเฮ้งยังไม่เปิด
 
