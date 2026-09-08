@@ -355,7 +355,7 @@ function dayMasterFactor(
     isPositive: usefulWealth,
     titleTh: usefulWealth ? 'ได้บริหารจัดการ — ธาตุทรัพย์เป็นคุณ' : 'พลังบริหารที่ต้องวางให้ถูกที่',
     explanation: usefulWealth
-      ? `ธาตุ${ELEMENTS[elA].th}ของ${nameA}คุมธาตุ${ELEMENTS[elB].th}ของ${nameB}และเป็นธาตุอุปการะของ${nameA}เอง — ${nameA}จะรู้สึกได้ "จัดการงาน" อย่างมีคุณค่า เหมาะกับบทบาทที่มีความเป็นเจ้าของ`
+      ? `ธาตุ${ELEMENTS[elA].th}ของ${nameA}คุมธาตุ${ELEMENTS[elB].th}ของ${nameB}และเป็นธาตุอุปถัมภ์ของ${nameA}เอง — ${nameA}จะรู้สึกได้ "จัดการงาน" อย่างมีคุณค่า เหมาะกับบทบาทที่มีความเป็นเจ้าของ`
       : `ธาตุ${ELEMENTS[elA].th}ของ${nameA}คุมธาตุ${ELEMENTS[elB].th}ของ${nameB} — ${nameA}มีแนวโน้มอยากขับเคลื่อน/ปรับเปลี่ยนแนวทางองค์กร ควรเปิดช่องรับความคิดเห็นเพื่อเปลี่ยนแรงดันเป็นนวัตกรรม`,
   }
 }
@@ -390,8 +390,8 @@ function elementSupportFactors(
         pair: matchedNames.join('/'),
         points: matched * 4,
         isPositive: true,
-        titleTh: `ดวง${providerName}เติมธาตุอุปการะให้${receiverName}`,
-        explanation: `ดวงของ${providerName}มีธาตุ${matchedNames.join('และ')}เด่น ซึ่งเป็นธาตุอุปการะที่ดวงของ${receiverName}ต้องการ — อยู่ใกล้กันแล้วรู้สึก "เติมเต็ม" ทำงานร่วมกันราบรื่นขึ้น`,
+        titleTh: `ดวง${providerName}เติมธาตุอุปถัมภ์ให้${receiverName}`,
+        explanation: `ดวงของ${providerName}มีธาตุ${matchedNames.join('และ')}เด่น ซึ่งเป็นธาตุอุปถัมภ์ที่ดวงของ${receiverName}ต้องการ — อยู่ใกล้กันแล้วรู้สึก "เติมเต็ม" ทำงานร่วมกันราบรื่นขึ้น`,
       })
     }
 
@@ -441,7 +441,7 @@ function buildAdvice(
   const advice: string[] = []
   const fav = wuA.dayMaster.favorableElements[0]
   if (fav) {
-    advice.push(`ตำแหน่งที่เสริมดวง${nameA}: ${ROLE_BY_ELEMENT[fav]} (ธาตุอุปการะ: ${ELEMENTS[fav].th})`)
+    advice.push(`ตำแหน่งที่เสริมดวง${nameA}: ${ROLE_BY_ELEMENT[fav]} (ธาตุอุปถัมภ์: ${ELEMENTS[fav].th})`)
   }
   const clashes = factors.filter((f) => !f.isPositive && (f.code === 'BRANCH_CLASH' || f.code === 'STEM_CLASH'))
   if (clashes.length > 0) {
@@ -571,8 +571,8 @@ export function compareWithIndustry(
       pair: ELEMENTS[industryElement].th,
       points: 20,
       isPositive: true,
-      titleTh: 'ตรงธาตุอุปการะอันดับหนึ่ง',
-      explanation: `${industryName}เป็นธาตุ${ELEMENTS[industryElement].th} ตรงกับธาตุอุปการะอันดับแรกของ${nameA}พอดี — สภาพแวดล้อมของงานสายนี้จะหนุนดวงโดยตรง`,
+      titleTh: 'ตรงธาตุอุปถัมภ์อันดับหนึ่ง',
+      explanation: `${industryName}เป็นธาตุ${ELEMENTS[industryElement].th} ตรงกับธาตุอุปถัมภ์อันดับแรกของ${nameA}พอดี — สภาพแวดล้อมของงานสายนี้จะหนุนดวงโดยตรง`,
     })
   } else if (favIndex > 0) {
     factors.push({
@@ -581,8 +581,8 @@ export function compareWithIndustry(
       pair: ELEMENTS[industryElement].th,
       points: 12,
       isPositive: true,
-      titleTh: 'ตรงธาตุอุปการะรอง',
-      explanation: `${industryName}เป็นธาตุ${ELEMENTS[industryElement].th} ซึ่งเป็นธาตุอุปการะลำดับรองของ${nameA} — เข้ากันได้ดี`,
+      titleTh: 'ตรงธาตุอุปถัมภ์รอง',
+      explanation: `${industryName}เป็นธาตุ${ELEMENTS[industryElement].th} ซึ่งเป็นธาตุอุปถัมภ์ลำดับรองของ${nameA} — เข้ากันได้ดี`,
     })
   }
   if (dm.unfavorableElements.includes(industryElement)) {

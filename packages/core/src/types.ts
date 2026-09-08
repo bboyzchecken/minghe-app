@@ -149,7 +149,7 @@ export interface DayMasterAnalysis {
   strengthScore: number
   category: StrengthCategory
   categoryTh: string
-  /** ธาตุอุปการะ (เรียงตามลำดับความสำคัญ) */
+  /** ธาตุอุปถัมภ์ (เรียงตามลำดับความสำคัญ) */
   favorableElements: ElementKey[]
   /** ธาตุโทษ */
   unfavorableElements: ElementKey[]

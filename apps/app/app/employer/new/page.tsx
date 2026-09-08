@@ -273,7 +273,10 @@ export default function EmployerWizard() {
                 <Field label="ชื่อบริษัท (ไม่บังคับ)">
                   <TextInput value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
                 </Field>
-                <Field label="ประเภทอุตสาหกรรม">
+                <Field
+                  label="ประเภทอุตสาหกรรม"
+                  hint="เพื่อวิเคราะห์ว่าธุรกิจนี้ถูกโฉลกกับธาตุอุปถัมภ์ในดวงของผู้ถูกวิเคราะห์หรือไม่"
+                >
                   <Select value={industryId} onChange={(e) => setIndustryId(e.target.value)}>
                     <option value="">— เลือกอุตสาหกรรม —</option>
                     {INDUSTRIES.map((ind) => (

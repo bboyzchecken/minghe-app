@@ -117,7 +117,7 @@ export function ReportView({
             </div>
             <p className="mt-3 text-xs leading-relaxed text-ink-soft">{wu.strengthExplanation}</p>
             <div className="mt-3 flex flex-wrap gap-1.5">
-              <span className="text-xs text-muted">ธาตุอุปการะ:</span>
+              <span className="text-xs text-muted">ธาตุอุปถัมภ์:</span>
               {wu.favorableElements.map((e) => (
                 <span key={e} className="chip !py-0.5" style={{ borderColor: `${ELEMENT_META[e].color}66` }}>
                   <ElementIcon element={e} size={12} /> {ELEMENT_META[e].th}

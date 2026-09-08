@@ -7,7 +7,7 @@
  *   得勢 (มีพวก)    : ก้านฟ้าอื่นๆ ที่เป็นพวก (比劫/印) → 0–30 คะแนน
  * รวม 0–100: ≥60 แข็ง, 45–59 สมดุล, <45 อ่อน
  *
- * ธาตุอุปการะ (喜用神 อย่างย่อ):
+ * ธาตุอุปถัมภ์ (喜用神 อย่างย่อ):
  *   ก้านวันแข็ง → ชอบธาตุระบาย/ใช้กำลัง (食傷, 財, 官殺)
  *   ก้านวันอ่อน → ชอบธาตุหนุน (印, 比劫)
  *   สมดุล → เสริมธาตุที่พร่องที่สุดในดวง
@@ -84,7 +84,7 @@ export function elementDistribution(chart: BaziChart): ElementDistribution {
   return { counts: rounded, percentages, strongest, weakest, missing }
 }
 
-/** วิเคราะห์กำลังก้านวัน + ธาตุอุปการะ */
+/** วิเคราะห์กำลังก้านวัน + ธาตุอุปถัมภ์ */
 export function dayMasterAnalysis(chart: BaziChart): DayMasterAnalysis {
   const dm = chart.dayMaster
   const dmElement = dm.element
@@ -169,7 +169,7 @@ export function dayMasterAnalysis(chart: BaziChart): DayMasterAnalysis {
     unfavorable = [GENERATED_BY[dmElement], dmElement]
     explanation =
       `ก้านวัน ${dm.cn} (ธาตุ${ELEMENTS[dmElement].th}) มีกำลังแข็ง — ` +
-      `ธาตุอุปการะคือธาตุที่ช่วยระบายและใช้กำลัง ได้แก่ ${favorable
+      `ธาตุอุปถัมภ์คือธาตุที่ช่วยระบายและใช้กำลัง ได้แก่ ${favorable
         .map((e) => ELEMENTS[e].th)
         .join(', ')} ส่วนธาตุ${ELEMENTS[GENERATED_BY[dmElement]].th}และธาตุ${ELEMENTS[dmElement].th}จะยิ่งเสริมให้ล้นเกิน`
   } else if (category === 'weak') {
@@ -177,7 +177,7 @@ export function dayMasterAnalysis(chart: BaziChart): DayMasterAnalysis {
     unfavorable = [CONTROLLED_BY[dmElement], GENERATES[dmElement], CONTROLS[dmElement]]
     explanation =
       `ก้านวัน ${dm.cn} (ธาตุ${ELEMENTS[dmElement].th}) กำลังอ่อน — ` +
-      `ธาตุอุปการะคือธาตุที่เข้ามาหนุน ได้แก่ ${favorable
+      `ธาตุอุปถัมภ์คือธาตุที่เข้ามาหนุน ได้แก่ ${favorable
         .map((e) => ELEMENTS[e].th)
         .join(', ')} ควรเลี่ยงสภาพแวดล้อมที่ธาตุ${ELEMENTS[CONTROLLED_BY[dmElement]].th}แรงเกิน`
   } else {

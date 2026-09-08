@@ -237,7 +237,11 @@ export default function JobSeekerWizard() {
                   <DateInput value={foundingDate} onChange={setFoundingDate} />
                 </Field>
               ) : (
-                <Field label="ประเภทอุตสาหกรรม" className="sm:col-span-2">
+                <Field
+                  label="ประเภทอุตสาหกรรม"
+                  hint="เพื่อวิเคราะห์ว่าธุรกิจปัจจุบันถูกโฉลกกับธาตุอุปถัมภ์ในดวงของคุณหรือไม่"
+                  className="sm:col-span-2"
+                >
                   <Select value={industryId} onChange={(e) => setIndustryId(e.target.value)}>
                     <option value="">— เลือกอุตสาหกรรม —</option>
                     {INDUSTRIES.map((ind) => (

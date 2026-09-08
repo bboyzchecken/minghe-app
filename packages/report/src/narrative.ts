@@ -54,7 +54,7 @@ export function buildNarrative(data: AssembledData): NarrativeSection[] {
         `${ELEMENT_CHARACTER[chart.dayMasterElement] ?? ''} เกิดปีนักษัตร${chart.zodiacTh} ` +
         `เสาวันคือ ${dayPillar?.ganzhi ?? ''} และเสาเดือน (วังการงาน) คือ ${monthPillar?.ganzhi ?? ''}`,
       `กำลังของก้านวันประเมินได้ ${wu.strengthScore}/100 จัดเป็น${wu.strengthCategoryTh} — ${wu.strengthExplanation}`,
-      `ธาตุอุปการะของดวงนี้คือ ${favTh} — การได้อยู่ในสภาพแวดล้อม บทบาท หรือทีมที่มีพลังธาตุเหล่านี้ ` +
+      `ธาตุอุปถัมภ์ของดวงนี้คือ ${favTh} — การได้อยู่ในสภาพแวดล้อม บทบาท หรือทีมที่มีพลังธาตุเหล่านี้ ` +
         `จะช่วยหนุนให้คุณ${name}ทำงานได้ลื่นไหลและมีกำลังใจมั่นคงขึ้น`,
       wu.missing.length > 0
         ? `ข้อสังเกต: ดวงนี้พร่องธาตุ${wu.missing.map((e) => ELEMENTS[e].th).join(', ')} ` +
