@@ -3,6 +3,7 @@
  * — ส่วนนี้ deterministic 100%: engine คำนวณ / LLM มีหน้าที่เรียบเรียงทีหลังเท่านั้น
  */
 
+import { computeStars } from './stars'
 import {
   analyzeWuXing,
   annualOutlook,
@@ -337,6 +338,7 @@ export function assembleReport(input: GenerateReportInput): AssembledReport {
       industry: industryData,
     },
     compatibility: compatibilityView(compat),
+    stars: computeStars(subjectChart, subjectWu),
     team,
     annual,
     disclaimer: REPORT_DISCLAIMER,

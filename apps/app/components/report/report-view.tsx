@@ -3,7 +3,7 @@
 import type { PairHighlight, ReportData, TeamPairView } from '@minghe/report/types'
 import { ELEMENT_META, ELEMENT_ORDER, type ElementKey } from '@/lib/brand'
 import { ElementIcon } from '@/components/element-icon'
-import { starsFromChart, tenGodsPercent } from '@/lib/report'
+import { tenGodsPercent } from '@/lib/report'
 
 const GRADE_COLOR: Record<string, string> = {
   excellent: '#7B8B57',
@@ -27,7 +27,8 @@ export function ReportView({
   const compat = data.compatibility
   const gradeColor = GRADE_COLOR[compat.grade] ?? '#BE8A2E'
   const tenGods = tenGodsPercent(wu.dominantTenGods)
-  const stars = starsFromChart(chart)
+  // แสดงเฉพาะดาวที่ผ่านท่อกรองแล้ว — ดาวที่ถูกชงหรือเกาะบนธาตุโทษถูกปิดเสียงตั้งแต่ assemble
+  const shownStars = data.stars.filter((s) => s.visible)
 
   return (
     <article className="report-doc mx-auto max-w-3xl">
@@ -174,27 +175,6 @@ export function ReportView({
         </div>
       </Section>
 
-      {/* ---- stars ---- */}
-      <Section flow title="ดาวจุติ" cn="神煞" hint="ดาวเสริมที่สะท้อนพรสวรรค์เฉพาะด้าน">
-        <div className="grid gap-3 sm:grid-cols-3">
-          {stars.map((s) => (
-            <div
-              key={s.key}
-              className={`rounded-lg border p-4 ${s.active ? 'border-jade/50 bg-jade/[0.06]' : 'border-line bg-paper-warm/30'}`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="cjk text-lg text-ink">{s.cn}</span>
-                <span className={`text-[11px] font-medium ${s.active ? 'text-jade' : 'text-muted'}`}>
-                  {s.active ? '● จุติ' : '○ ไม่จุติ'}
-                </span>
-              </div>
-              <div className="mt-0.5 text-sm font-medium text-ink">{s.th}</div>
-              <p className="mt-1.5 text-xs text-ink-soft">{s.active ? s.workMeaning : s.meaning}</p>
-            </div>
-          ))}
-        </div>
-      </Section>
-
       {/* ---- compatibility factors ---- */}
       <Section title="ปัจจัยความเข้ากัน" cn="合冲" hint="ความสัมพันธ์ระหว่างสองดวง">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -240,6 +220,41 @@ export function ReportView({
           </div>
           <p className="mt-2 text-sm text-ink-soft">{data.annual.summary}</p>
         </div>
+      </Section>
+
+      {/* ---- stars — ท้ายลำดับตาม DataSpec B20 · ดาวขยายความ ไม่ใช่ตัวชี้ขาด ---- */}
+      <Section
+        flow
+        title="ดาวประจำดวง"
+        cn="神煞"
+        hint="ดาวเสริมที่ผ่านเกณฑ์การอ่านแล้ว — เป็นตัวขยายความ ไม่ใช่ตัวชี้ขาด"
+      >
+        {shownStars.length === 0 ? (
+          <p className="rounded-lg border border-line bg-paper-warm/30 p-4 text-sm text-ink-soft">
+            ไม่มีดาวที่ผ่านเกณฑ์การอ่านในดวงนี้ — ดาวที่ตรวจไม่จุติ หรือจุติแล้วแต่ถูกชงหรือเกาะบนธาตุโทษ
+            จึงไม่นำมาอ่านตามเกณฑ์ที่ซินแสกำหนด · การไม่มีดาวไม่ใช่ข้อด้อยของดวง
+          </p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {shownStars.map((s) => (
+              <div key={s.key} className="rounded-lg border border-jade/50 bg-jade/[0.06] p-4">
+                <div className="flex items-center justify-between">
+                  <span className="cjk text-lg text-ink">{s.cn}</span>
+                  <span className="text-[11px] font-medium text-jade">
+                    {s.pillarTh} · {s.branchCn}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-sm font-medium text-ink">{s.th}</div>
+                <p className="mt-1.5 text-xs text-ink-soft">{s.workMeaning}</p>
+                <p className="mt-2 text-[11px] text-muted">
+                  {s.domain === 'public'
+                    ? 'แสดงออกในพื้นที่การงานและสังคม'
+                    : 'แสดงออกในพื้นที่ส่วนตัวและความสัมพันธ์ใกล้ชิด'}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </Section>
 
       {/* ---- narrative ---- */}

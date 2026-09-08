@@ -11,6 +11,7 @@ import { aiAvailable, polishNarrative, readFace } from './llm'
 import type { FaceReadingView, GenerateReportInput, ReportData } from './types'
 
 export * from './types'
+export * from './stars'
 export { assembleReport, buildNarrative, polishNarrative, readFace, aiAvailable }
 
 export async function generateReport(input: GenerateReportInput): Promise<ReportData> {

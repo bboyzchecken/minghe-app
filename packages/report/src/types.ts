@@ -10,6 +10,9 @@ import type {
   ElementKey,
   TrueSolarTimeDetail,
 } from '@minghe/core'
+import type { StarView } from './stars'
+
+export type { StarView, StarKey, StarDomain, StarElementStatus } from './stars'
 
 export interface HiddenStemView {
   cn: string
@@ -135,6 +138,11 @@ export interface ReportData {
     industry?: { id: string; th: string; element: ElementKey; elementTh: string }
   }
   compatibility: CompatibilityView
+  /**
+   * ดาวประจำดวง (神煞) ทุกดวงที่ตรวจ พร้อมผลของท่อกรอง
+   * ⚠️ แสดงผลได้เฉพาะตัวที่ `visible === true` — ดูเหตุผลของท่อกรองที่ `stars.ts`
+   */
+  stars: StarView[]
   team?: {
     overallScore: number
     overallGradeTh: string

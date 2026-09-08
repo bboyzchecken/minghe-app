@@ -7,8 +7,7 @@
 
 import { assembleReport } from '@minghe/report/assemble'
 import { buildNarrative } from '@minghe/report/narrative'
-import type { GenerateReportInput, ReportData, ChartView } from '@minghe/report/types'
-import { computeStars, type StarResult } from './stars'
+import type { GenerateReportInput, ReportData } from '@minghe/report/types'
 
 export type { GenerateReportInput, ReportData } from '@minghe/report/types'
 
@@ -44,13 +43,6 @@ export function tenGodsPercent(
     workMeaning: d.workMeaning,
     percent: Math.round((d.weight / total) * 100),
   }))
-}
-
-/** คำนวณดาวจุติจากผังของ subject */
-export function starsFromChart(chart: ChartView): StarResult[] {
-  const branches = chart.pillars.map((p) => p.branchCn)
-  const yearBranch = chart.pillars.find((p) => p.position === 'year')?.branchCn ?? ''
-  return computeStars({ dayStemCn: chart.dayMasterCn, yearBranchCn: yearBranch, branchesCn: branches })
 }
 
 /** อินพุตตัวอย่าง (ใช้กับหน้า /report เมื่อยังไม่มีออเดอร์จริง) */

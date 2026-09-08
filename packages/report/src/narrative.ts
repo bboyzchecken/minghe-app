@@ -18,7 +18,7 @@ const ELEMENT_CHARACTER: Record<string, string> = {
 }
 
 export function buildNarrative(data: AssembledData): NarrativeSection[] {
-  const { subject, org, compatibility, annual, meta } = data
+  const { subject, org, compatibility, annual, meta, stars } = data
   const chart = subject.chart
   const wu = subject.wuxing
   const dmTh = chart.dayMasterElementTh
@@ -128,7 +128,45 @@ export function buildNarrative(data: AssembledData): NarrativeSection[] {
     ],
   })
 
-  // 7) ปิดท้าย
+  // 7) ดาวประจำดวง — ข้อ 1.2 ให้ดาวมีหัวข้อของตัวเอง
+  //    แต่ข้อ 1.1 ห้ามดาวตัดสิน จึงวางไว้ท้ายลำดับตาม DataSpec B20 ไม่ใช่ headline
+  //    และย่อหน้านำต้องบอกให้ชัดว่าดาวเป็นตัวขยายความ ไม่ใช่ตัวชี้ขาด
+  const shown = stars.filter((s) => s.visible)
+  const starParagraphs: string[] = [
+    `ดาวประจำดวง (神煞) เป็นตัวขยายความของผังปาจือ ไม่ใช่ตัวชี้ขาด — ข้อสรุปทั้งหมดในรายงานฉบับนี้ ` +
+      `มาจากโครงสร้างธาตุและกำลังก้านวันเป็นหลัก ดาวที่ยกมาอ่านต่อไปนี้ผ่านการตรวจแล้วว่ากิ่งที่ดาวเกาะ ` +
+      `ไม่ถูกชง และไม่ได้เกาะบนธาตุโทษของดวง`,
+  ]
+  if (shown.length > 0) {
+    starParagraphs.push(
+      ...shown.map((s) => {
+        const where = s.pillarTh ? `จุติที่${s.pillarTh} (กิ่ง ${s.branchCn})` : 'จุติในดวงนี้'
+        const domain =
+          s.domain === 'public'
+            ? 'พลังด้านนี้มักแสดงออกในพื้นที่การงานและสังคม'
+            : 'พลังด้านนี้มักแสดงออกในพื้นที่ส่วนตัวและความสัมพันธ์ใกล้ชิด'
+        return `${s.th} (${s.cn}) ${where} — ${s.workMeaning} · ${domain}`
+      }),
+    )
+    starParagraphs.push(
+      `ข้อควรระวังในการอ่าน: ดาวเหล่านี้เป็นส่วนเสริม ไม่ควรใช้ล้มข้อสรุปเรื่องความเข้ากันหรือกำลังก้านวัน ` +
+        `ที่วิเคราะห์ไว้ข้างต้น`,
+    )
+  } else {
+    starParagraphs.push(
+      `ในดวงของคุณ${name}ไม่มีดาวที่ผ่านเกณฑ์การอ่านในรอบนี้ — ดาวที่ตรวจไม่จุติ หรือจุติแล้วแต่ถูกชง ` +
+        `หรือเกาะบนธาตุโทษ ซึ่งตามเกณฑ์ที่ซินแสกำหนดไว้จะไม่นำมาอ่าน`,
+      `การไม่มีดาวไม่ใช่ข้อด้อยของดวง — โครงสร้างธาตุและกำลังก้านวันยังเป็นตัวชี้ทิศทางหลักอยู่แล้ว ` +
+        `และเป็นส่วนที่บริหารได้ด้วยการเลือกสภาพแวดล้อมการทำงาน`,
+    )
+  }
+  sections.push({
+    id: 'stars',
+    title: 'ดาวประจำดวง (神煞)',
+    paragraphs: starParagraphs,
+  })
+
+  // 8) ปิดท้าย
   sections.push({
     id: 'closing',
     title: 'บทสรุป',
