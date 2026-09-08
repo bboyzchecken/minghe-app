@@ -426,7 +426,7 @@ export default function EmployerWizard() {
                   ))}
                 </div>
                 <div className="font-display-th text-lg text-ink">เครื่องคำนวณกำลังตั้งเสาสี่ต้น…</div>
-                <div className="text-sm text-muted">เพื่อส่งให้ซินแสตรวจสอบและตีความ</div>
+                <div className="text-sm text-muted">ตามเกณฑ์การอ่านที่ซินแสกำหนดและอนุมัติไว้</div>
               </div>
             ) : sessionLoading ? (
               <div className="mt-6 h-14 animate-pulse rounded-lg bg-paper-warm" aria-hidden="true" />

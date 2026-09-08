@@ -47,6 +47,8 @@ export function SiteFooter() {
             <div>
               <div className="mb-2 font-medium text-ink">ข้อมูล</div>
               <ul className="space-y-1.5 text-ink-soft">
+                <li><Link href="/elements" className="hover:text-gold">ก้านวันทั้ง 10 แบบ</Link></li>
+                <li><Link href="/about" className="hover:text-gold">จดหมายจากทีมซินแส</Link></li>
                 <li><Link href="/legal/privacy" className="hover:text-gold">นโยบายความเป็นส่วนตัว (PDPA)</Link></li>
                 <li><Link href="/legal/terms" className="hover:text-gold">เงื่อนไขการใช้งาน</Link></li>
                 <li><Link href="/legal/refund" className="hover:text-gold">การคืนเงิน / ลบบัญชี</Link></li>

@@ -53,7 +53,7 @@ export const DEPTH_TIERS: DepthTier[] = [
     label: 'Executive Insights',
     cn: '深度',
     price: 399,
-    blurb: 'วิเคราะห์เชิงลึก + cross-data ผู้บริหาร × บริษัท × อุตสาหกรรม + ซินแสตรวจทาน',
+    blurb: 'วิเคราะห์เชิงลึก + cross-data ผู้บริหาร × บริษัท × อุตสาหกรรม + เกณฑ์อ่านดวงที่ซินแสอนุมัติ',
   },
 ]
 
