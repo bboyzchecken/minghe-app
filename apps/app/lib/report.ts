@@ -50,7 +50,9 @@ export const DEMO_INPUT: GenerateReportInput = {
   subject: {
     name: 'พรนิษฐ์',
     gender: 'female',
-    birthDate: '1992-05-18',
+    // ดวงนี้มี 文昌 จุติที่เสาปี (กิ่ง 申) และผ่านท่อกรองดาว — รายงานตัวอย่างจึงโชว์
+    // หัวข้อ "ดาวประจำดวง" ได้จริง ไม่ใช่ empty state (ดู packages/report/src/stars.ts)
+    birthDate: '1980-08-03',
     birthTime: '08:45',
     province: 'กรุงเทพมหานคร',
   },
