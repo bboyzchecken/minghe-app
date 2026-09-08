@@ -186,9 +186,10 @@ function topHighlight(factors: CompatibilityFactor[], positive: boolean): PairHi
  * รับ pairs ที่เรียงจากมากไปน้อยแล้ว
  */
 function pairSummaryOf(pairs: TeamPairView[], subjectName: string): string {
-  if (pairs.length === 0) return ''
   const best = pairs[0]
   const worst = pairs[pairs.length - 1]
+  // pairs อาจว่าง — guard ตรงนี้ทำให้ best/worst แคบเป็น TeamPairView ตลอดทั้งฟังก์ชัน
+  if (!best || !worst) return ''
   if (pairs.length === 1) {
     return `${subjectName}กับคุณ${best.name} ได้ ${best.score}/100 (${best.gradeTh})`
   }

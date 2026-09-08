@@ -36,6 +36,23 @@
 
 ---
 
+## เริ่มต้นใช้งาน
+
+repo นี้ต้องใช้ **Node.js ≥ 22.13** — pnpm 11 เรียก `node:sqlite` ซึ่งยังไม่มีใน Node 20
+ถ้าใช้เวอร์ชันเก่ากว่านั้น `pnpm install` จะล้มทันทีด้วย `ERR_UNKNOWN_BUILTIN_MODULE: node:sqlite`
+
+เวอร์ชันที่ต้องใช้ล็อกไว้ที่ [`.nvmrc`](.nvmrc) — **สั่ง `nvm use` ก่อน `pnpm install` เสมอ**
+
+```bash
+nvm use                           # ครั้งแรก: nvm install 22
+pnpm install --frozen-lockfile
+```
+
+> เทอร์มินัลใหม่ทุกหน้าต่างต้อง `nvm use` ใหม่ — nvm ไม่จำข้าม session
+> nvm (macOS/Linux) และ fnm อ่าน `.nvmrc` ให้เอง · **nvm-windows ต้องสั่ง `nvm use 22` ตรง ๆ** เพราะไม่รองรับ `.nvmrc`
+
+---
+
 ## 🚀 รันทั้งระบบด้วยคำสั่งเดียว (Docker)
 
 ต้องมี Docker Desktop (หรือ Docker Engine + compose plugin)
@@ -91,7 +108,7 @@ docker compose -f docker-compose.yml -f docker-compose.mock.yml up --build -d
 
 ## พัฒนาในเครื่อง (ไม่ใช้ Docker)
 
-ต้องมี Node.js ≥ 20, pnpm (`npm i -g pnpm`), Go ≥ 1.23, MySQL (ใช้ `docker compose up -d db` ก็ได้)
+ต้องมี Node.js ≥ 22.13 (`nvm use` ก่อน — ดูหัวข้อ **เริ่มต้นใช้งาน**), pnpm (`npm i -g pnpm`), Go ≥ 1.23, MySQL (ใช้ `docker compose up -d db` ก็ได้)
 
 ```bash
 cp .env.example .env              # แก้ MINGHE_MODE=mock ถ้าอยากเล่นหน้าเว็บอย่างเดียว
