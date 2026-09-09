@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เช็คก่อนเปิด UAT 9 ก.ย.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@500;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+SC:wght@600&display=swap">
+<style>
+  :root {
+    --paper:      #FBF8F2;
+    --surface:    #FFFFFF;
+    --surface-2:  #F3EEE4;
+    --ink:        #1B1712;
+    --ink-soft:   #5F564A;
+    --ink-faint:  #8C8275;
+    --line:       #E2D9C9;
+    --line-soft:  #EFE8DA;
+    --gold:       #A07526;
+    --gold-soft:  #C9A34E;
+    --cinnabar:   #AE3427;
+    --cinnabar-bg:#F7E7E3;
+    --jade:       #3F6F52;
+    --jade-bg:    #E5EFE6;
+    --amber:      #8A6410;
+    --amber-bg:   #F6ECD4;
+    --focus:      #A07526;
+
+    --f-display: "Noto Serif Thai", "Noto Serif SC", Georgia, serif;
+    --f-body: "IBM Plex Sans Thai", "Segoe UI", system-ui, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    --f-cjk: "Noto Serif SC", "Noto Serif Thai", serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #14120E;
+      --surface:    #1C1915;
+      --surface-2:  #24201A;
+      --ink:        #F2ECE1;
+      --ink-soft:   #B4AB9C;
+      --ink-faint:  #857C6F;
+      --line:       #332E26;
+      --line-soft:  #29241E;
+      --gold:       #D3AB5C;
+      --gold-soft:  #A5843F;
+      --cinnabar:   #E2705F;
+      --cinnabar-bg:#33201C;
+      --jade:       #7FB58D;
+      --jade-bg:    #1B2A1F;
+      --amber:      #D6AE60;
+      --amber-bg:   #2C2417;
+      --focus:      #D3AB5C;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #14120E;
+    --surface:    #1C1915;
+    --surface-2:  #24201A;
+    --ink:        #F2ECE1;
+    --ink-soft:   #B4AB9C;
+    --ink-faint:  #857C6F;
+    --line:       #332E26;
+    --line-soft:  #29241E;
+    --gold:       #D3AB5C;
+    --gold-soft:  #A5843F;
+    --cinnabar:   #E2705F;
+    --cinnabar-bg:#33201C;
+    --jade:       #7FB58D;
+    --jade-bg:    #1B2A1F;
+    --amber:      #D6AE60;
+    --amber-bg:   #2C2417;
+    --focus:      #D3AB5C;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 62rem; margin: 0 auto; padding: 0 1.5rem 5rem; }
+
+  /* ---------- masthead ---------- */
+  header.masthead {
+    border-bottom: 1px solid var(--line);
+    padding: 2.5rem 0 1.75rem;
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .seal {
+    flex: none;
+    width: 3.25rem; height: 3.25rem;
+    display: grid; place-items: center;
+    background: var(--cinnabar);
+    color: #FBF8F2;
+    border-radius: 3px;
+    font-family: var(--f-cjk);
+    font-size: 1.35rem;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .masthead-text { flex: 1 1 20rem; min-width: 0; }
+  .eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+  }
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(1.6rem, 4vw, 2.15rem);
+    line-height: 1.25;
+    margin: 0.35rem 0 0.5rem;
+    text-wrap: balance;
+  }
+  .dek { color: var(--ink-soft); margin: 0; max-width: 46ch; }
+  .dek b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- progress strip ---------- */
+  .strip {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 2rem;
+  }
+  .strip-inner {
+    max-width: 62rem; margin: 0 auto; padding: 0.7rem 1.5rem;
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  }
+  .count {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .count span { color: var(--ink-faint); }
+  .bar {
+    flex: 1 1 8rem; height: 4px; min-width: 6rem;
+    background: var(--line); border-radius: 2px; overflow: hidden;
+  }
+  .bar > i { display: block; height: 100%; width: 0%; background: var(--gold); transition: width .25s ease; }
+  .sync {
+    font-size: 0.74rem; color: var(--ink-faint);
+    font-family: var(--f-mono); white-space: nowrap;
+  }
+  .sync.on { color: var(--jade); }
+
+  button.toggle {
+    font: inherit; font-size: 0.8rem;
+    background: transparent; color: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: 999px; padding: 0.2rem 0.75rem; cursor: pointer;
+  }
+  button.toggle[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  button.toggle:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* ---------- sections ---------- */
+  section.block { margin-bottom: 2.75rem; }
+  .block-head {
+    display: flex; gap: 0.9rem; align-items: baseline;
+    padding-bottom: 0.6rem;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 0.25rem;
+  }
+  .block-letter {
+    font-family: var(--f-display);
+    font-size: 1.5rem; font-weight: 700; color: var(--gold);
+    line-height: 1; flex: none;
+  }
+  .block-head h2 {
+    font-family: var(--f-display); font-weight: 700;
+    font-size: 1.15rem; margin: 0; flex: 1 1 auto;
+  }
+  .block-sub { font-size: 0.82rem; color: var(--ink-faint); white-space: nowrap; }
+  .block-note {
+    font-size: 0.82rem; color: var(--ink-soft);
+    padding: 0.55rem 0 0.2rem;
+  }
+  .block-note code { font-family: var(--f-mono); background: var(--surface-2); padding: 0.05rem 0.35rem; border-radius: 3px; }
+
+  .group-label {
+    font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em;
+    color: var(--ink-faint); text-transform: uppercase;
+    margin: 1.25rem 0 0.35rem;
+  }
+
+  ul.rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+
+  li.row {
+    display: grid;
+    grid-template-columns: 1.5rem 1fr auto;
+    gap: 0 0.75rem;
+    align-items: start;
+    padding: 0.7rem 0.75rem 0.7rem 0.6rem;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  li.row.block-item {
+    background: var(--cinnabar-bg);
+    border-left: 3px solid var(--cinnabar);
+    padding-left: 0.85rem;
+  }
+  li.row.hide { display: none; }
+
+  li.row input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none;
+    width: 1.05rem; height: 1.05rem; margin: 0.28rem 0 0;
+    border: 1.5px solid var(--ink-faint); border-radius: 3px;
+    background: var(--surface); cursor: pointer; flex: none;
+    display: grid; place-content: center;
+  }
+  li.row input[type="checkbox"]:checked { background: var(--ink); border-color: var(--ink); }
+  li.row input[type="checkbox"]:checked::after {
+    content: ""; width: 0.55rem; height: 0.3rem;
+    border-left: 2px solid var(--paper); border-bottom: 2px solid var(--paper);
+    transform: rotate(-45deg) translate(1px, -1px);
+  }
+
+  .row-main { min-width: 0; }
+  .row-label { color: var(--ink); }
+  li.row.done .row-label { color: var(--ink-faint); text-decoration: line-through; text-decoration-color: var(--line); }
+  .row-detail { font-size: 0.83rem; color: var(--ink-soft); margin-top: 0.15rem; }
+  .row-detail b { color: var(--ink); font-weight: 600; }
+
+  code.cmd {
+    display: block;
+    font-family: var(--f-mono); font-size: 0.8rem;
+    background: var(--surface-2); color: var(--ink);
+    border: 1px solid var(--line-soft);
+    border-radius: 4px;
+    padding: 0.3rem 0.5rem; margin-top: 0.3rem;
+    overflow-x: auto; white-space: pre;
+  }
+  code.inline { font-family: var(--f-mono); font-size: 0.85em; color: var(--gold); }
+
+  .badge {
+    font-family: var(--f-mono); font-size: 0.72rem; font-weight: 500;
+    padding: 0.12rem 0.5rem; border-radius: 3px; white-space: nowrap;
+    margin-top: 0.3rem; display: inline-block;
+  }
+  .badge.pass { background: var(--jade-bg); color: var(--jade); }
+  .badge.fail { background: var(--cinnabar-bg); color: var(--cinnabar); }
+  .badge.todo { background: var(--amber-bg); color: var(--amber); }
+  .badge.info { background: var(--surface-2); color: var(--ink-soft); }
+
+  /* ---------- status table ---------- */
+  .table-scroll { overflow-x: auto; margin-top: 0.9rem; }
+  table { border-collapse: collapse; width: 100%; min-width: 30rem; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--line-soft); }
+  th { font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+  td.track { font-family: var(--f-mono); font-weight: 500; color: var(--gold); }
+  td.state { white-space: nowrap; }
+
+  footer.foot {
+    margin-top: 3rem; padding-top: 1.25rem;
+    border-top: 1px solid var(--line);
+    font-size: 0.82rem; color: var(--ink-faint);
+  }
+  footer.foot code { font-family: var(--f-mono); }
+
+  @media (max-width: 34rem) {
+    li.row { grid-template-columns: 1.5rem 1fr; }
+    li.row .badge { grid-column: 2; justify-self: start; }
+    .block-sub { white-space: normal; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="strip">
+  <div class="strip-inner">
+    <span class="count" id="count">0 <span>/ 0 เสร็จ</span></span>
+    <span class="bar"><i id="barfill"></i></span>
+    <button class="toggle" id="filter" aria-pressed="false">ซ่อนที่เสร็จแล้ว</button>
+    <span class="sync" id="sync">เก็บเฉพาะเครื่องนี้</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="seal" aria-hidden="true">命合</div>
+    <div class="masthead-text">
+      <div class="eyebrow">MingHe · ตรวจก่อนเปิด UAT</div>
+      <h1>เช็คลิสต์วันที่ 8 ก.ย. ก่อนเปิดให้ผู้ทดสอบ 9 ก.ย.</h1>
+      <p class="dek">
+        รวมเคสจาก <b>MingHe-TestCases-SIT v2.0</b> เข้ากับแผนงานจริงหลังคำตอบ อ.เม (8 ก.ย.)
+        — เอกสาร SIT baseline ไว้ตั้งแต่ 26 ส.ค. บางเคสจึงยังปิดไม่ได้รอบนี้ ดูหมวด D
+      </p>
+    </div>
+  </header>
+
+  <div id="app"></div>
+
+  <footer class="foot">
+    ผลในป้ายสถานะมาจากการรันจริงบนเครื่อง dev วันที่ 8 ก.ย. 2026 (Node v22.21.1) —
+    ติ๊กในหน้านี้คือการยืนยันของทีม แชร์กันเห็นทุกคน ·
+    ไฟล์ต้นทางในรีโป: <code>docs/checklist-uat-2026-09-09.md</code>
+  </footer>
+</div>
+
+<script>
+const SECTIONS = [
+  {
+    letter: "A", title: "เช็คด้วยคำสั่ง", sub: "รันแล้วรู้ผลทันที · ~5 นาที",
+    note: 'ตั้งต้นทุกครั้ง: <code>nvm use 22</code>',
+    items: [
+      { id:"a1", label:"typecheck packages/core", cmd:"cd packages/core && npx tsc --noEmit", r:"pass", rt:"0 error" },
+      { id:"a2", label:"typecheck packages/report", cmd:"cd packages/report && npx tsc --noEmit", r:"pass", rt:"0 error" },
+      { id:"a3", label:"typecheck apps/app", cmd:"cd apps/app && npx tsc --noEmit", r:"pass", rt:"0 error" },
+      { id:"a4", label:"เทสต์ engine ปาจือ", cmd:"cd packages/core && npx vitest run", r:"pass", rt:"69/69" },
+      { id:"a5", label:"เทสต์ตัวประกอบรายงาน", cmd:"cd packages/report && npx vitest run", r:"pass", rt:"4/4" },
+      { id:"a6", label:"build เว็บทั้งชุด", cmd:"cd apps/app && npx next build", r:"pass", rt:"exit 0 · 48 หน้า" },
+      { id:"a7", label:"คำโฆษณาที่ compliance ห้ามปล่อย ต้องหมดแล้ว", cmd:'grep -rn "ซินแสตรวจทาน" apps/app/app apps/app/lib apps/app/components', r:"pass", rt:"0 จุด" },
+      { id:"a8", label:"คำเก่าที่ อ.เม ให้เปลี่ยน ต้องหมด", cmd:'grep -rn "ธาตุอุปการะ" apps/app/app apps/app/lib apps/app/components packages/core/src', detail:"เป้าหมายคือเหลือ <b>0</b> — ปลดล็อกเมื่อ S1 เสร็จ", r:"fail", rt:"ยังเหลือ 16 จุด" },
+      { id:"a9", label:"ติดตั้งได้บนเทอร์มินัลที่เพิ่งเปิดใหม่", cmd:"pnpm install --frozen-lockfile", detail:"ทดสอบเสมือนคนที่ clone ใหม่พรุ่งนี้", r:"todo", rt:"ยังไม่ได้ตรวจ" }
+    ]
+  },
+  {
+    letter: "B", title: "งานที่ต้องปิดให้จบก่อนพรุ่งนี้", sub: "3 สายจาก 5 ยังค้าง",
+    groups: [
+      { label: "B0 · เร่งด่วนที่สุด — งานสองสายยังไม่ commit", items: [
+        { id:"b01", label:"commit 5 ไฟล์ที่แก้ไว้", detail:"<b>page.tsx · employer/page.tsx · employer/new/page.tsx · lib/pricing.ts · lib/content/types.ts</b>", block:true },
+        { id:"b02", label:"commit ไฟล์ใหม่ที่ยัง untracked", detail:"<b>app/about/ · app/elements/ · lib/content/{home,about,stems}.ts</b> — ถ้าเครื่องมีปัญหาคืนนี้คืองาน S2+S3 หายทั้งคู่", block:true }
+      ]},
+      { label: 'B1 · สาย S1 — คำว่า “ธาตุอุปถัมภ์” (อ.เม ข้อ 2.1) · ยังไม่เริ่ม', items: [
+        { id:"b11", label:"แก้ค่า USEFUL_GOD.th ที่ glossary.ts บรรทัด 45", detail:"ตอนนี้ยังเป็น TODO ค้างไว้ ค่ายังเป็นคำเดิม" },
+        { id:"b12", label:"ไล่แก้คำเดิมให้ครบทั้ง 16 จุด" },
+        { id:"b13", label:"เขียนเทสต์ glossary.test.ts", detail:"ทุกคีย์ต้องมีครบ 4 field และไม่มีค่าว่าง" },
+        { id:"b14", label:"เติมคำอธิบายใต้ช่องในฟอร์มทั้งสองฝั่ง", detail:"employer/new · jobseeker/new — คอมโพเนนต์ Field รองรับ prop hint อยู่แล้ว" }
+      ]},
+      { label: "B2 · สาย S4 — ดาวในรายงาน (อ.เม ข้อ 1.2) · ยังไม่เริ่ม", items: [
+        { id:"b21", label:"เติม 4 field ที่ stars.ts ยังไม่มี", detail:"<b>pillar · elementStatus · isClashed · domain</b> — ตอนนี้มี 6 field เดิม" },
+        { id:"b22", label:"ท่อกรองก่อนแสดงผล", detail:"ดาวที่ถูกชง หรือเป็นธาตุให้โทษรุนแรง ต้องไม่โผล่ในรายงาน" },
+        { id:"b23", label:"เพิ่มหัวข้อ “ดาวประจำดวง” ใน narrative.ts", detail:"ตอนนี้ narrative ไม่มีหัวข้อดาวเลย มีแต่ Section ในหน้าเว็บ" },
+        { id:"b24", label:"ตรวจว่าดาวไม่ override ข้อสรุป", detail:"วางท้ายลำดับ ไม่ใช่ headline" }
+      ]},
+      { label: "B3 · สาย S5 — 大運 (อ.เม ข้อ 4.1 + 4.2) · ยังไม่เริ่ม", items: [
+        { id:"b31", label:"เขียนสูตรจริงใน computeLuckPillars", detail:"ตอนนี้ฟังก์ชัน<b>ยัง throw อยู่</b>" },
+        { id:"b32", label:"ทิศทางจากเพศ + หยิน-หยางของก้านปี · นับวันถึงเจี๋ยชี่ ÷ 3 · คืนอย่างน้อย 8 เสา" },
+        { id:"b33", label:"ใช้ lunar-typescript ที่มีอยู่ — ห้ามเพิ่ม dependency", detail:"กัน pnpm-lock.yaml ชนกับสายอื่น" },
+        { id:"b34", label:"เทสต์ luck-pillars.test.ts อย่างน้อย 6 เคส", detail:"ชาย/หญิง × ปีหยาง/ปีหยิน × เกิดใกล้เจี๋ยชี่" },
+        { id:"b35", label:"เทสต์เดิม 69 เคสของ core ต้องไม่พัง" }
+      ]}
+    ]
+  },
+  {
+    letter: "C", title: "เดินโฟลว์ด้วยมือ", sub: "โหมด mock · ทำหลัง merge ครบ",
+    items: [
+      { id:"c1", label:"ฝั่งองค์กรจนจบเส้นทาง", detail:"หน้าแรก → ฉันเป็นองค์กร → กรอกฟอร์ม → teaser → บังคับ login → ชำระเงิน → เปิดรายงาน" },
+      { id:"c2", label:"ฝั่งคนหางานจนจบเส้นทางเดียวกัน" },
+      { id:"c3", label:"สมัครสมาชิก + OTP + ลืมรหัสผ่าน" },
+      { id:"c4", label:"เปิดรายงานด้วยรหัสที่หน้า /r" },
+      { id:"c5", label:"เปิดหน้าใหม่ของ S2 ทุกหน้า ไม่มี 404", detail:"/about · /elements · /elements/[stem] ครบทั้ง 10 ก้านวัน" },
+      { id:"c6", label:"เปิดบนมือถือหนึ่งรอบ", detail:"หน้าแรก + ฟอร์ม + รายงาน" },
+      { id:"c7", label:"ตรวจย่อหน้าแก้ความขัดแย้งในจดหมายหน้า /about", detail:"ต้องมีประโยคที่บอกว่า <b>AI ไม่แตะการคำนวณ</b> — ไม่งั้นจดหมายขัดกับตัวสินค้าเอง" }
+    ]
+  },
+  {
+    letter: "D", title: "เคสใน SIT ที่ยังปิดไม่ได้รอบนี้", sub: "ติ๊กเมื่อเขียนแจ้งผู้ทดสอบแล้ว",
+    note: 'ทำเป็นเอกสาร “สิ่งที่ยังไม่มีในรอบนี้” ให้ผู้ทดสอบอ่านก่อนเริ่ม กันการรายงานเป็นบั๊กทั้งที่ยังไม่ได้ทำ',
+    items: [
+      { id:"d1", label:"TC_CALC_002 — ตรวจได้เฉพาะสี่เสาและดิถี", detail:"月令 / Month Command <b>ยังไม่มีในโค้ด</b>", r:"info", rt:"บางส่วน" },
+      { id:"d2", label:"TC_PROF_001 — Five Structures / Ten Profiles", detail:"ยังไม่มีกฎ derive เลย ตามที่แผนรอบ 2 เขียนไว้เอง", r:"info", rt:"ยังไม่มี" },
+      { id:"d3", label:"TC_UI_002 · TC_UI_003 — กราฟโครงสร้างและ Profile Role", detail:"ตามมาจาก TC_PROF_001 จึงยังแสดงผลไม่ได้", r:"info", rt:"ยังไม่มี" },
+      { id:"d4", label:"TC_UI_001 — Evidence Layer panel", r:"info", rt:"ยังไม่มี" },
+      { id:"d5", label:"TC_LLM_001 — reasoning 19 ขั้น", detail:"ชั้น AI ปัจจุบันทำแค่ขัดเงาภาษา ไม่ได้ให้เหตุผล — dev plan ระบุเองว่าไม่ลงรอบนี้", r:"info", rt:"ยังไม่มี" },
+      { id:"d6", label:"TC_LLM_002 — soul.md QA", detail:"<b>ยังไม่มีไฟล์ soul.md ในรีโป</b> มีแต่ชื่อในเอกสารแผน", r:"info", rt:"ยังไม่มีไฟล์" },
+      { id:"d7", label:"TC_PAY_001 — เปลี่ยนโจทย์แล้ว: ใช้ access code แทนเกตเวย์", detail:"รอบนี้ผู้ทดสอบกรอกรหัสเข้าใช้แทนการชำระเงิน — ดูแผนใน <b>docs/plan-access-code-tracking.md</b> · เคสเดิมของ GB Prime Pay ยกไปหลัง UAT", r:"info", rt:"เปลี่ยนแผน" },
+      { id:"d8", label:"TC_SEC_001 — เข้ารหัสข้อมูลเกิด", detail:"ทั้งรีโปไม่มีโค้ดเข้ารหัสเลย ตาราง profiles เก็บวัน-เวลา-พิกัดเกิดเป็น plaintext — <b>ควรยกเป็นงานบังคับก่อน public launch</b>", r:"fail", rt:"ยังไม่มี", block:true },
+      { id:"d9", label:"แจ้งข้ออื่นที่ยังไม่มี", detail:"เดือนจร/กราฟจังหวะ · ตาราง “จุดที่ควรบริหาร” ยังเป็นโครงเปล่ารอกฎจาก อ.เม · โหงวเฮ้งยังไม่เปิด" }
+    ]
+  }
+];
+
+const TRACKS = [
+  ["T0", "แก้ Node blocker + วางโครงไฟล์", "done", "เสร็จ · commit ea7fe13"],
+  ["S1", "คลังคำกลาง + ธาตุอุปถัมภ์", "not", "ยังไม่เริ่ม"],
+  ["S2", "หน้าแรก + /elements + /about", "warn", "เสร็จ · ยังไม่ commit"],
+  ["S3", "คำโฆษณา + ราคา", "warn", "เสร็จ · ยังไม่ commit"],
+  ["S4", "ดาวในรายงาน", "not", "ยังไม่เริ่ม"],
+  ["S5", "大運", "not", "ยังไม่เริ่ม · stub ยัง throw"]
+];
+
+const BADGE_TEXT = { pass: "ผ่าน", fail: "ไม่ผ่าน", todo: "ยังไม่รัน", info: "ทราบแล้ว" };
+const STATE_CLASS = { done: "pass", warn: "todo", not: "fail" };
+
+const state = Object.create(null);
+let hideDone = false;
+let db = null;
+
+function itemHtml(it) {
+  const cls = ["row"];
+  if (it.block) cls.push("block-item");
+  let badge = "";
+  if (it.r) badge = `<span class="badge ${it.r}">${it.rt || BADGE_TEXT[it.r]}</span>`;
+  return `<li class="${cls.join(" ")}" data-id="${it.id}">
+    <input type="checkbox" id="cb-${it.id}" data-id="${it.id}">
+    <div class="row-main">
+      <label class="row-label" for="cb-${it.id}">${it.label}</label>
+      ${it.detail ? `<div class="row-detail">${it.detail}</div>` : ""}
+      ${it.cmd ? `<code class="cmd">${it.cmd.replace(/</g, "&lt;")}</code>` : ""}
+    </div>
+    ${badge}
+  </li>`;
+}
+
+function render() {
+  const parts = SECTIONS.map((s) => {
+    let body = "";
+    if (s.items) body += `<ul class="rows">${s.items.map(itemHtml).join("")}</ul>`;
+    if (s.groups) body += s.groups.map((g) =>
+      `<div class="group-label">${g.label}</div><ul class="rows">${g.items.map(itemHtml).join("")}</ul>`
+    ).join("");
+    return `<section class="block">
+      <div class="block-head">
+        <span class="block-letter">${s.letter}</span>
+        <h2>${s.title}</h2>
+        <span class="block-sub">${s.sub}</span>
+      </div>
+      ${s.note ? `<div class="block-note">${s.note}</div>` : ""}
+      ${body}
+    </section>`;
+  });
+
+  parts.push(`<section class="block">
+    <div class="block-head">
+      <span class="block-letter">E</span>
+      <h2>สถานะ 5 สายของ dev plan</h2>
+      <span class="block-sub">ณ 8 ก.ย. 2026</span>
+    </div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>สาย</th><th>เรื่อง</th><th>สถานะ</th></tr></thead>
+      <tbody>${TRACKS.map(([k, t, st, txt]) =>
+        `<tr><td class="track">${k}</td><td>${t}</td><td class="state"><span class="badge ${STATE_CLASS[st]}">${txt}</span></td></tr>`
+      ).join("")}</tbody>
+    </table></div>
+  </section>`);
+
+  document.getElementById("app").innerHTML = parts.join("");
+
+  document.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.addEventListener("change", () => setDone(cb.dataset.id, cb.checked));
+  });
+  paint();
+}
+
+function allIds() {
+  const ids = [];
+  SECTIONS.forEach((s) => {
+    (s.items || []).forEach((i) => ids.push(i.id));
+    (s.groups || []).forEach((g) => g.items.forEach((i) => ids.push(i.id)));
+  });
+  return ids;
+}
+
+function paint() {
+  const ids = allIds();
+  let done = 0;
+  ids.forEach((id) => {
+    const on = !!state[id];
+    if (on) done++;
+    const cb = document.getElementById("cb-" + id);
+    if (cb) cb.checked = on;
+    const row = document.querySelector(`li.row[data-id="${id}"]`);
+    if (row) {
+      row.classList.toggle("done", on);
+      row.classList.toggle("hide", hideDone && on);
+    }
+  });
+  document.getElementById("count").innerHTML = `${done} <span>/ ${ids.length} เสร็จ</span>`;
+  document.getElementById("barfill").style.width = (ids.length ? (done / ids.length) * 100 : 0) + "%";
+}
+
+function setDone(id, on) {
+  state[id] = on;
+  paint();
+  try { localStorage.setItem("minghe-uat-checks", JSON.stringify(state)); } catch (e) {}
+  if (db) {
+    db.doc("checks/" + id).set({ done: on, at: new Date().toISOString() })
+      .catch(() => {});
+  }
+}
+
+document.getElementById("filter").addEventListener("click", (e) => {
+  hideDone = !hideDone;
+  e.currentTarget.setAttribute("aria-pressed", String(hideDone));
+  e.currentTarget.textContent = hideDone ? "แสดงทั้งหมด" : "ซ่อนที่เสร็จแล้ว";
+  paint();
+});
+
+try {
+  const saved = JSON.parse(localStorage.getItem("minghe-uat-checks") || "{}");
+  Object.keys(saved).forEach((k) => { state[k] = !!saved[k]; });
+} catch (e) {}
+
+render();
+
+(async () => {
+  if (!window.claude || typeof window.claude.use !== "function") return;
+  const store = await window.claude.use("db");
+  if (!store) return;
+  db = store;
+  const sync = document.getElementById("sync");
+  sync.textContent = "แชร์กับทีมแล้ว";
+  sync.classList.add("on");
+  db.collection("checks").onSnapshot(
+    (snap) => {
+      snap.docs.forEach((d) => { state[d.id] = !!(d.data() || {}).done; });
+      paint();
+    },
+    () => { sync.textContent = "เก็บเฉพาะเครื่องนี้"; sync.classList.remove("on"); }
+  );
+})();
+</script>
+</body>
+</html>
