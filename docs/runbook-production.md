@@ -670,3 +670,102 @@ npx wrangler deploy workers/api-proxy/src/index.js --name minghe-api-proxy
 ```
 
 **ค่าใช้จ่าย ~$14–15/เดือน** — Droplet $12 + Backups $2.40 · Reserved IP, Cloud Firewall, Cloudflare Pages/Workers/DNS ฟรีหมด
+
+
+---
+
+## 14. ภาคผนวก — ทำทุกอย่างจาก Windows (PowerShell)
+
+Windows 11 มี OpenSSH ติดมาให้แล้วที่ `C:\Windows\System32\OpenSSH` ไม่ต้องลง PuTTY หรือ WSL
+แต่ซินแท็กซ์ต่างจาก Git Bash — ใช้ `$env:USERPROFILE` แทน `~` และไม่มี `cat ... | ssh`
+
+> 💻 = พิมพ์ใน **PowerShell บนเครื่องตัวเอง** · 🖥️ = พิมพ์ที่ **prompt ของ Droplet** หลัง ssh เข้าไปแล้ว
+> สับสนสองอย่างนี้คือสาเหตุที่คำสั่งพังบ่อยที่สุด — `sed`, `docker`, `nano` ไม่มีใน Windows
+
+### 14.1 💻 สร้าง SSH key
+
+```powershell
+ssh-keygen -t ed25519 -C "minghe-deploy" -f "$env:USERPROFILE\.ssh\minghe_do"
+```
+
+**กด Enter เปล่าสองครั้งตอนถาม passphrase** — GitHub Actions ปลดล็อกคีย์ที่มีรหัสผ่านไม่ได้ ต้องเว้นว่างเท่านั้น
+(อย่าใส่ `-N ""` แบบใน bash — PowerShell 5.1 ตัดเครื่องหมายคำพูดเปล่าทิ้งก่อนส่งให้โปรแกรม แล้วจะได้ผลไม่ตรงที่คิด)
+
+### 14.2 💻 ล็อกอินด้วยรหัสผ่านครั้งแรก
+
+```powershell
+ssh root@<DROPLET_IP>
+```
+
+DigitalOcean บังคับตั้งรหัสใหม่ทันทีที่เข้าครั้งแรก ทำให้จบแล้วพิมพ์ `exit` ออกมา
+
+### 14.3 💻 ส่ง public key ขึ้นเครื่อง (ถามรหัสผ่านครั้งสุดท้าย)
+
+```powershell
+$pub = (Get-Content "$env:USERPROFILE\.ssh\minghe_do.pub" -Raw).Trim()
+ssh root@<DROPLET_IP> "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '$pub' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+`.Trim()` สำคัญกว่าที่เห็น — ไฟล์บน Windows ลงท้ายด้วย CRLF ถ้าปล่อยไว้ `` จะติดไปในบรรทัด
+`authorized_keys` แล้ว sshd จะไม่ยอมรับคีย์นั้น โดยไม่ฟ้องอะไรเลย เห็นแค่ว่ายังถามรหัสผ่านอยู่
+
+### 14.4 💻 ทดสอบว่าคีย์ใช้ได้จริง
+
+```powershell
+ssh -i "$env:USERPROFILE\.ssh\minghe_do" -o PasswordAuthentication=no root@<DROPLET_IP> "echo OK"
+```
+
+ได้คำว่า `OK` โดยไม่ถามรหัส = ผ่าน · ถ้าโดนปฏิเสธ ให้ทำ 14.3 ซ้ำ **ห้ามข้ามไป 14.5**
+
+### 14.5 🖥️ ปิด password login (พิมพ์บน Droplet)
+
+```powershell
+ssh -i "$env:USERPROFILE\.ssh\minghe_do" root@<DROPLET_IP>
+```
+
+แล้วพิมพ์ทีละบรรทัดที่ prompt ของ Droplet — **อย่าวางชุดนี้ใน PowerShell** :
+
+```bash
+sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+grep -rl 'PasswordAuthentication' /etc/ssh/sshd_config.d/ 2>/dev/null | xargs -r sed -i 's/^PasswordAuthentication.*/PasswordAuthentication no/'
+sshd -t && systemctl restart ssh
+sshd -T | grep -E '^(passwordauthentication|permitrootlogin)'
+```
+
+> ⚠️ เปิดหน้าต่าง ssh อีกบานทิ้งไว้ระหว่างทำข้อนี้ ถ้าพลาดจะยังมีทางเข้า — ไม่งั้นต้องไปงัดผ่าน Recovery Console ของ DigitalOcean
+
+### 14.6 💻 ส่งไฟล์ deploy ขึ้นเครื่อง
+
+```powershell
+scp -i "$env:USERPROFILE\.ssh\minghe_do" -r "D:\kami\minghe-app\deploy\droplet" root@<DROPLET_IP>:~/droplet
+```
+
+### 14.7 🖥️ เตรียมเครื่อง (พิมพ์บน Droplet)
+
+```bash
+cd ~/droplet && chmod +x setup.sh && ./setup.sh
+nano /opt/minghe/.env
+```
+
+ใน `nano`: แก้เสร็จกด `Ctrl+O` → `Enter` เพื่อบันทึก แล้ว `Ctrl+X` เพื่อออก
+
+### 14.8 💻 คัดลอก private key ไปใส่ GitHub Secret
+
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\minghe_do" -Raw | Set-Clipboard
+```
+
+แล้ววางในช่อง `DEPLOY_SSH_KEY` ที่หน้า GitHub → Settings → Environments → `production`
+ต้องได้ทั้งไฟล์ตั้งแต่ `-----BEGIN OPENSSH PRIVATE KEY-----` ถึง `-----END OPENSSH PRIVATE KEY-----`
+
+### 14.9 💻 คำสั่งตรวจผล (แทน curl/nslookup แบบ bash)
+
+```powershell
+Resolve-DnsName api.minghe.work -Server 8.8.8.8
+Invoke-RestMethod https://api.minghe.work/healthz
+(Invoke-WebRequest https://minghe.work -MaximumRedirection 0 -SkipHttpErrorCheck).StatusCode
+```
+
+> `curl` ใน PowerShell 5.1 เป็นนามแฝงของ `Invoke-WebRequest` ไม่ใช่ curl จริง ธงแบบ `-sSI` จึงใช้ไม่ได้
+> ถ้าอยากใช้ curl จริงให้เรียก `curl.exe` เต็มชื่อ
