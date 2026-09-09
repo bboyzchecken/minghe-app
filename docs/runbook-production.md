@@ -392,6 +392,7 @@ Cloudflare → **My Profile → API Tokens → Create Token → Create Custom To
 | `MINGHE_MODE` | `live` | ไม่ใส่ = อ่านจาก `.env` ของ repo แล้วอาจได้ mock |
 | `MINGHE_API_BASE_URL` | `https://api.minghe.work` | ฝังตอน build |
 | `MINGHE_GOOGLE_LOGIN_ENABLED` | `false` | |
+| `MINGHE_GA_ID` | `G-0SX48ZY9QB` | **Production เท่านั้น ห้ามใส่ใน Preview** ไม่งั้นทราฟฟิกจากทุก PR ปนเข้ารายงาน · เว้นว่าง = ไม่โหลด GA และไม่ขึ้นแบนเนอร์ |
 | `NEXT_TELEMETRY_DISABLED` | `1` | |
 | `NODE_VERSION` | `22` | `.nvmrc` มี `22` อยู่แล้ว ใส่ซ้ำกันพลาด |
 | `PNPM_VERSION` | `11.9.0` | ใส่**เฉพาะเมื่อ** build ล้มเพราะ pnpm เวอร์ชันไม่ตรงกับ `packageManager` |

@@ -6,6 +6,8 @@ import { Providers } from '@/components/providers'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { AccessCodeCapture } from '@/components/access-code-capture'
+import { Analytics } from '@/components/analytics'
+import { CookieConsent } from '@/components/cookie-consent'
 
 const trirong = Trirong({
   subsets: ['thai', 'latin'],
@@ -63,6 +65,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SiteHeader />
           <main>{children}</main>
           <SiteFooter />
+          {/* GA4 โหลดต่อเมื่อยินยอมแล้วเท่านั้น — ดู lib/analytics.ts */}
+          <CookieConsent />
+          <Analytics />
         </Providers>
       </body>
     </html>

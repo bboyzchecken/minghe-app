@@ -64,6 +64,7 @@ const nextConfig = {
     NEXT_PUBLIC_MINGHE_MODE: mode,
     NEXT_PUBLIC_API_BASE_URL: pick('MINGHE_API_BASE_URL', 'http://localhost:5000'),
     NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED: pick('MINGHE_GOOGLE_LOGIN_ENABLED', 'false'),
+    NEXT_PUBLIC_GA_ID: pick('MINGHE_GA_ID', ''),
   },
 }
 
