@@ -218,6 +218,46 @@ ssh -i ~/.ssh/minghe_do root@<RESERVED_IP>
 
 DigitalOcean ให้ล็อกอินเป็น **`root`** ตั้งแต่แรก (ต่างจาก Lightsail ที่ให้ `ubuntu`) — จำไว้ใช้ตอนตั้ง `DEPLOY_USER` ใน §6
 
+### 3.5 ถ้าสร้าง Droplet ด้วย root password (ไม่ได้ใส่ SSH key ตอนสร้าง)
+
+🔴 **ต้องเพิ่ม SSH key ก่อน ไม่งั้น deploy อัตโนมัติทำงานไม่ได้เลย** — `deploy-api.yml` ใช้ `appleboy/ssh-action`
+ซึ่งรับได้เฉพาะ private key (`DEPLOY_SSH_KEY`) ไม่มีช่องให้ใส่รหัสผ่าน
+
+**1) ล็อกอินด้วยรหัสผ่านครั้งแรก** — DigitalOcean บังคับให้ตั้งรหัสใหม่ทันทีที่เข้าครั้งแรก ทำให้จบก่อน
+
+```bash
+ssh root@<DROPLET_IP>
+exit
+```
+
+**2) ส่ง public key ขึ้นเครื่อง** (ถามรหัสผ่านครั้งเดียว — ถ้ายังไม่มีคีย์ ให้สร้างตาม §1 ก่อน)
+
+```bash
+cat ~/.ssh/minghe_do.pub | ssh root@<DROPLET_IP> "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+**3) ทดสอบว่าเข้าได้ด้วยคีย์โดยไม่ถามรหัส**
+
+```bash
+ssh -i ~/.ssh/minghe_do -o PasswordAuthentication=no root@<DROPLET_IP> "echo คีย์ใช้ได้"
+```
+
+**4) ปิด password login** — Droplet ที่เปิด SSH password ทิ้งไว้บนอินเทอร์เน็ตโดนสแกนเดารหัสตลอดเวลา
+
+> ⚠️ **ห้ามปิดหน้าต่าง ssh ที่เปิดค้างอยู่จนกว่าข้อ 3 จะผ่าน** — ถ้าปิด password auth ทั้งที่คีย์ยังใช้ไม่ได้
+> จะเข้าเครื่องไม่ได้อีกเลย ต้องไปงัดผ่าน Recovery Console ของ DigitalOcean
+
+```bash
+ssh -i ~/.ssh/minghe_do root@<DROPLET_IP>
+# บน Droplet
+sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+# cloud-init ของ DO เขียนทับค่าไว้ในโฟลเดอร์นี้ — ถ้าไม่แก้ด้วย การปิดข้างบนไม่มีผล
+grep -rl 'PasswordAuthentication' /etc/ssh/sshd_config.d/ 2>/dev/null | xargs -r sed -i 's/^PasswordAuthentication.*/PasswordAuthentication no/'
+sshd -t && systemctl restart ssh
+sshd -T | grep -E '^(passwordauthentication|permitrootlogin)'   # ต้องได้ no และ prohibit-password
+```
+
 ---
 
 ## 4. นาที 15–20 — DNS records ใน Cloudflare
