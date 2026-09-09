@@ -12,8 +12,8 @@
 | `packages/core` | เครื่องคำนวณปาจือ (pure TypeScript, browser-safe, มีเทสต์) |
 | `packages/report` | ประกอบรายงาน + เรียบเรียงไทย |
 | `tools/brand` | สคริปต์แยกโลโก้จาก `logo.png` + ทำ favicon + เจนภาพประกอบด้วย FLUX (ดู [README](tools/brand/README.md)) |
-| `deploy/lightsail` | compose + Caddy + setup script สำหรับ production API บน AWS Lightsail |
-| `.github/workflows` | CI (ทุก PR) · deploy หน้าบ้าน → Cloudflare Pages · deploy API → Lightsail (เฉพาะ `main`) |
+| `deploy/droplet` | compose + Caddy + setup script สำหรับ production API บน DigitalOcean Droplet |
+| `.github/workflows` | CI (ทุก PR) · deploy หน้าบ้าน → Cloudflare Pages · deploy API → DigitalOcean Droplet (เฉพาะ `main`) |
 
 สถาปัตยกรรมตัดสินแล้ว 22 ส.ค. 2026 (Q0-1/Q0-1b ใน [`docs/uat-2026-08-01-feedback-plan.md`](docs/uat-2026-08-01-feedback-plan.md)):
 หน้าเว็บเรียกข้อมูลผ่าน hooks ใน [`apps/app/lib/queries.ts`](apps/app/lib/queries.ts) → interface เดียว [`apps/app/lib/api`](apps/app/lib/api/types.ts)
@@ -91,7 +91,7 @@ WEB_PORT=80 docker compose up -d  # เปลี่ยนพอร์ตหน�
 | ผู้ดูแลระบบ | `admin@minghe.work` | `changeme1234` | Admin Console `/admin` — มีงานรอรับเรื่อง 2 ใบ |
 
 **สมัครสมาชิกใหม่ได้จริง** ที่ `/register` — ยังไม่ได้ตั้งค่า Gmail จึงเปิด `MINGHE_OTP_ECHO=true`:
-รหัส OTP จะแสดงบนหน้าจอพร้อมป้าย "สภาพแวดล้อมทดสอบ" · **production ต้องปิด** (ดู `deploy/lightsail/.env.example`)
+รหัส OTP จะแสดงบนหน้าจอพร้อมป้าย "สภาพแวดล้อมทดสอบ" · **production ต้องปิด** (ดู `deploy/droplet/.env.example`)
 
 ค่าปรับได้ทั้งหมดอยู่ใน [`.env.example`](.env.example) — คัดลอกเป็น `.env` แล้ว compose จะอ่านให้เอง
 
@@ -136,7 +136,7 @@ pnpm build     # static export → apps/app/out
 | ส่วน | ไปที่ | workflow |
 |---|---|---|
 | หน้าบ้าน `minghe.work` | Cloudflare Pages (static, ฟรี, กัน request ให้) | [`deploy-web.yml`](.github/workflows/deploy-web.yml) |
-| API `api.minghe.work` | AWS Lightsail 1 เครื่อง (Docker: MySQL + API + Caddy TLS) | [`deploy-api.yml`](.github/workflows/deploy-api.yml) |
+| API `api.minghe.work` | DigitalOcean Droplet 1 เครื่อง (Docker: MySQL + API + Caddy TLS) | [`deploy-api.yml`](.github/workflows/deploy-api.yml) |
 
 กติกา `main`: ต้องผ่าน PR + CI (`web`, `api`) ก่อน merge — ruleset นำเข้าได้จาก [`.github/rulesets/main.json`](.github/rulesets/main.json)
 และ workflow deploy ใช้ environment `production` ที่จำกัด branch = `main`
@@ -155,7 +155,7 @@ minghe-app/
 ├── packages/core/            # เครื่องคำนวณปาจือ
 ├── packages/report/          # ประกอบรายงาน + เรียบเรียงไทย
 ├── tools/brand/              # แยกโลโก้จาก logo.png · favicon · เจนภาพด้วย FLUX
-├── deploy/lightsail/         # production API: compose + Caddyfile + setup.sh
+├── deploy/droplet/           # production API: compose + Caddyfile + setup.sh
 ├── .github/workflows/        # ci.yml · deploy-web.yml · deploy-api.yml
 ├── .github/rulesets/         # main.json — ป้องกัน main
 ├── docs/                     # แผน UAT · ชีทคำถามค้าง · deploy.md

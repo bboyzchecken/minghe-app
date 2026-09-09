@@ -1,23 +1,23 @@
-# Deploy API → AWS Lightsail (api.minghe.work)
+# Deploy API → DigitalOcean Droplet (api.minghe.work)
 #
 # ขั้นตอน: build image → push GHCR (ghcr.io/<owner>/minghe-api:<sha>, :latest)
-#          → ssh เข้า Lightsail → docker compose pull + up (zero-config: ไฟล์ compose/Caddyfile ส่งไปด้วยทุกครั้ง)
+#          → ssh เข้า Droplet → docker compose pull + up (zero-config: ไฟล์ compose/Caddyfile ส่งไปด้วยทุกครั้ง)
 #
 # กติกา production เหมือน deploy-web.yml: push เข้า main เท่านั้น + environment `production`
 #
 # Secrets ที่ต้องตั้งใน environment production:
-#   LIGHTSAIL_HOST     IP หรือโดเมนของเครื่อง (เช่น api.minghe.work)
-#   LIGHTSAIL_USER     ผู้ใช้ ssh (Ubuntu image = ubuntu)
-#   LIGHTSAIL_SSH_KEY  private key (PEM) ที่ Lightsail ให้ดาวน์โหลด
+#   DEPLOY_HOST        Reserved IP หรือโดเมนของ Droplet (เช่น api.minghe.work)
+#   DEPLOY_USER        ผู้ใช้ ssh — DigitalOcean ให้ root มาตั้งแต่แรก
+#   DEPLOY_SSH_KEY     private key ที่คู่กับ public key ที่ใส่ตอนสร้าง Droplet
 #   GHCR_PULL_TOKEN    (เฉพาะกรณี package เป็น private) PAT read:packages สำหรับให้เครื่อง pull image
-name: Deploy API (Lightsail)
+name: Deploy API (DigitalOcean)
 
 on:
   push:
     branches: [main]
     paths:
       - 'apps/api/**'
-      - 'deploy/lightsail/**'
+      - 'deploy/droplet/**'
       - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
 
@@ -64,7 +64,7 @@ jobs:
           cache-to: type=gha,scope=api,mode=max
 
   deploy:
-    name: deploy to Lightsail
+    name: deploy to Droplet
     needs: build-push
     runs-on: ubuntu-latest
     environment:
@@ -76,10 +76,10 @@ jobs:
       - name: Copy compose + Caddyfile to server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.LIGHTSAIL_HOST }}
-          username: ${{ secrets.LIGHTSAIL_USER }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
-          source: 'deploy/lightsail/docker-compose.yml,deploy/lightsail/Caddyfile'
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: 'deploy/droplet/docker-compose.yml,deploy/droplet/Caddyfile'
           target: /opt/minghe
           strip_components: 2
 
@@ -91,14 +91,14 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
         with:
-          host: ${{ secrets.LIGHTSAIL_HOST }}
-          username: ${{ secrets.LIGHTSAIL_USER }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: IMAGE_TAG,IMAGE,GHCR_USER,GHCR_PULL_TOKEN
           script: |
             set -e
             cd /opt/minghe
-            test -f .env || { echo "ยังไม่มี /opt/minghe/.env — รัน deploy/lightsail/setup.sh ก่อน"; exit 1; }
+            test -f .env || { echo "ยังไม่มี /opt/minghe/.env — รัน deploy/droplet/setup.sh ก่อน"; exit 1; }
             if [ -n "$GHCR_PULL_TOKEN" ]; then
               echo "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             fi

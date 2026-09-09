@@ -1,7 +1,7 @@
 # ============================================================
 # 命合 Mìnghé — Go API image
 # multi-stage: build แบบ static binary → รันบน alpine ตัวเล็ก (~30MB)
-# ใช้ทั้งใน docker compose (LAN demo) และบน Lightsail (ผ่าน GHCR)
+# ใช้ทั้งใน docker compose (LAN demo) และบน DigitalOcean Droplet (ผ่าน GHCR)
 # ============================================================
 
 FROM golang:1.23-alpine AS build

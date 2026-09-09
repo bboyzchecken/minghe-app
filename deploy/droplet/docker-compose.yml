@@ -1,5 +1,5 @@
 # ============================================================
-# 命合 Mìnghé — production API บน AWS Lightsail (เครื่องเดียว)
+# 命合 Mìnghé — production API บน DigitalOcean Droplet (เครื่องเดียว)
 #
 #   /opt/minghe/
 #   ├── docker-compose.yml   (ไฟล์นี้ — GitHub Actions ส่งมาให้ทุกครั้งที่ deploy)

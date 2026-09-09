@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
 # ============================================================
-# 命合 Mìnghé — เตรียมเครื่อง Lightsail (Ubuntu 22.04/24.04) ครั้งแรกครั้งเดียว
+# 命合 Mìnghé — เตรียมเครื่อง DigitalOcean Droplet (Ubuntu 24.04) ครั้งแรกครั้งเดียว
 #
-# ใช้: scp ไฟล์ในโฟลเดอร์ deploy/lightsail ไปที่เครื่อง แล้วรัน
-#   chmod +x setup.sh && sudo ./setup.sh
+# ใช้: scp ไฟล์ในโฟลเดอร์ deploy/droplet ไปที่เครื่อง แล้วรัน
+#   chmod +x setup.sh && ./setup.sh          # ถ้าล็อกอินเป็น root (ค่าเริ่มต้นของ DO)
+#   chmod +x setup.sh && sudo ./setup.sh     # ถ้าล็อกอินเป็นผู้ใช้อื่น
 #
 # สิ่งที่ทำ: ติดตั้ง Docker → สร้าง /opt/minghe → วาง compose/Caddyfile/.env → เปิด swap 1GB
-#            (Lightsail 1–2GB RAM รัน MySQL + API สบายขึ้น) → ยกระบบขึ้น
+#            (2GB RAM รัน MySQL + API สบายขึ้น) → ยกระบบขึ้น
 # หลังจากนี้ deploy ทุกครั้งมาจาก GitHub Actions (.github/workflows/deploy-api.yml)
 # ============================================================
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET=/opt/minghe
-DEPLOY_USER="${SUDO_USER:-ubuntu}"
+
+# DigitalOcean ให้ล็อกอินเป็น root มาตั้งแต่แรก ต่างจาก Lightsail ที่ให้ ubuntu + sudo
+# ถ้ารันด้วย sudo ใช้เจ้าของเดิม ถ้ารันเป็น root ตรง ๆ ก็เป็น root — ไม่ยัด ubuntu ที่อาจไม่มีจริง
+DEPLOY_USER="${SUDO_USER:-$(id -un)}"
+if [ "$(id -u)" -ne 0 ]; then
+  echo "สคริปต์นี้ต้องรันด้วยสิทธิ์ root — ใช้ sudo ./setup.sh" >&2
+  exit 1
+fi
 
 echo "→ [1/5] ติดตั้ง Docker Engine + compose plugin"
 if ! command -v docker >/dev/null 2>&1; then
@@ -60,7 +68,7 @@ cat <<EOF
 
 เสร็จแล้ว ✓
   · ตรวจ API:  curl -s http://127.0.0.1:5000/healthz
-  · เมื่อ DNS ${API_DOMAIN:-api.minghe.work} ชี้มาที่เครื่องนี้และเปิดพอร์ต 80/443 แล้ว Caddy จะออก TLS ให้เอง
+  · เมื่อ DNS ${API_DOMAIN:-api.minghe.work} ชี้มาที่เครื่องนี้และ DO Firewall เปิด 80/443 แล้ว Caddy จะออก TLS ให้เอง
   · backup ฐานข้อมูลรายวัน: เพิ่ม cron
       0 3 * * * cd /opt/minghe && docker compose exec -T db sh -c 'mysqldump -uroot -p"\$MYSQL_ROOT_PASSWORD" minghe' | gzip > /opt/minghe/backup-\$(date +\\%F).sql.gz
 EOF
