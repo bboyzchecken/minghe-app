@@ -132,6 +132,14 @@ func loadConfig() core.Config {
 			Port:     viper.GetString("REDIS_PORT"),
 			Password: viper.GetString("REDIS_PASSWORD"),
 		},
+		SMTP: core.SMTPConfig{
+			Host:        viper.GetString("SMTP_HOST"),
+			Port:        firstNonEmpty(viper.GetString("SMTP_PORT"), "587"),
+			Username:    viper.GetString("SMTP_USERNAME"),
+			Password:    viper.GetString("SMTP_PASSWORD"),
+			SenderEmail: viper.GetString("SMTP_SENDER_EMAIL"),
+			SenderName:  firstNonEmpty(viper.GetString("SMTP_SENDER_NAME"), "命合 Mìnghé"),
+		},
 		GoogleAPI: core.GoogleAPIConfig{
 			ClientID:     viper.GetString("GMAIL_CLIENT_ID"),
 			ClientSecret: viper.GetString("GMAIL_CLIENT_SECRET"),
@@ -338,6 +346,16 @@ func runCommand(command string, config core.Config) {
 		logger.Error("unknown command: ", command)
 		os.Exit(1)
 	}
+}
+
+// firstNonEmpty คืนค่าแรกที่ไม่ว่าง — ใช้ตั้งค่าเริ่มต้นให้ตัวแปรที่ไม่บังคับกรอก
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // splitCSV แยกค่าที่คั่นด้วย comma และตัดช่องว่าง — ใช้กับ CORS_ALLOWED_ORIGINS

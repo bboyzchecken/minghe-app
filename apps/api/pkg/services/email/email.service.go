@@ -2,9 +2,14 @@ package email
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"mime"
+	"net"
+	"net/smtp"
 	"strings"
+	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -15,20 +20,34 @@ import (
 	"github.com/minghe/api/pkg/logger"
 )
 
+// เวลารอสูงสุดต่อการเชื่อมต่อหนึ่งครั้ง — กันไม่ให้ request สมัครสมาชิกค้าง
+// เมื่อเซิร์ฟเวอร์ปลายทางไม่ตอบ (net/smtp ไม่มี timeout ในตัว)
+const smtpTimeout = 20 * time.Second
+
 type EmailService struct {
 	config core.GoogleAPIConfig
+	smtp   core.SMTPConfig
 	appURL string
 	svc    *gmail.Service
 }
 
-// New สร้าง service ส่งอีเมลผ่าน Gmail API
-// ถ้าตั้งค่า OAuth ไม่ครบ จะคืน service ที่ log อีเมลลง stdout แทนการส่งจริง
-// เพื่อให้รันในเครื่อง dev ได้โดยไม่ต้องมี credential
+// New สร้าง service ส่งอีเมล โดยเลือกช่องทางตามค่าที่ตั้งไว้
+//
+//  1. SMTP        — ช่องทางหลัก ใช้เมื่อมี SMTP_HOST และ SMTP_USERNAME
+//  2. Gmail API   — ช่องทางสำรอง ใช้เมื่อมี GMAIL_CLIENT_ID และ GMAIL_REFRESH_TOKEN
+//  3. log เท่านั้น — ไม่มีทั้งสองอย่าง (โหมด dev รันได้โดยไม่ต้องมี credential)
+//
+// ลำดับนี้ทำให้สลับช่องทางได้ด้วยการแก้ .env อย่างเดียว ไม่ต้อง build ใหม่
 func New(cfg core.Config) *EmailService {
-	s := &EmailService{config: cfg.GoogleAPI, appURL: cfg.AppBaseURL}
+	s := &EmailService{config: cfg.GoogleAPI, smtp: cfg.SMTP, appURL: cfg.AppBaseURL}
+
+	if s.smtpConfigured() {
+		logger.Info("email: ส่งผ่าน SMTP ", cfg.SMTP.Host, ":", cfg.SMTP.Port, " ในนาม ", s.fromAddress())
+		return s
+	}
 
 	if cfg.GoogleAPI.ClientID == "" || cfg.GoogleAPI.RefreshToken == "" {
-		logger.Warn("gmail credentials not configured — emails will be logged instead of sent")
+		logger.Warn("email credentials not configured — emails will be logged instead of sent")
 		return s
 	}
 
@@ -54,14 +73,134 @@ func New(cfg core.Config) *EmailService {
 	return s
 }
 
-// Send ส่งอีเมล HTML หนึ่งฉบับ
+// Send ส่งอีเมล HTML หนึ่งฉบับผ่านช่องทางที่ตั้งไว้
 func (s *EmailService) Send(to, subject, htmlBody string) error {
-	if s.svc == nil {
+	switch {
+	case s.smtpConfigured():
+		return s.sendSMTP(to, subject, htmlBody)
+	case s.svc != nil:
+		return s.sendGmailAPI(to, subject, htmlBody)
+	default:
 		logger.WithFields(map[string]any{"to": to, "subject": subject}).
-			Info("email not sent (gmail not configured)")
+			Info("email not sent (no mail transport configured)")
 		return nil
 	}
+}
 
+func (s *EmailService) smtpConfigured() bool {
+	return s.smtp.Host != "" && s.smtp.Username != ""
+}
+
+// fromAddress คืนที่อยู่ผู้ส่งจริงที่ใช้ในซอง SMTP (MAIL FROM)
+//
+// ต้องเป็นที่อยู่ของกล่องจดหมายที่ล็อกอินเข้าไป ไม่งั้นเซิร์ฟเวอร์ปฏิเสธด้วย
+// "not allowed to send as" — GoDaddy บังคับข้อนี้เข้มกว่าผู้ให้บริการทั่วไป
+func (s *EmailService) fromAddress() string {
+	if s.smtp.SenderEmail != "" {
+		return s.smtp.SenderEmail
+	}
+	return s.smtp.Username
+}
+
+// buildMessage ประกอบอีเมลตาม RFC 5322
+//
+// หัวข้อและชื่อผู้ส่งเป็นภาษาไทย/จีน จึงต้องเข้ารหัสแบบ RFC 2047 ก่อน
+// ไม่งั้นบางไคลเอนต์แสดงเป็นอักขระเสีย และบางตัวนับเป็นสัญญาณของสแปม
+func (s *EmailService) buildMessage(to, subject, htmlBody string) []byte {
+	from := s.fromAddress()
+	fromHeader := from
+	if s.smtp.SenderName != "" {
+		fromHeader = fmt.Sprintf("%s <%s>", mime.QEncoding.Encode("utf-8", s.smtp.SenderName), from)
+	}
+
+	var msg strings.Builder
+	fmt.Fprintf(&msg, "From: %s\r\n", fromHeader)
+	fmt.Fprintf(&msg, "To: %s\r\n", to)
+	fmt.Fprintf(&msg, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", subject))
+	fmt.Fprintf(&msg, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
+	msg.WriteString("MIME-Version: 1.0\r\n")
+	msg.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+	msg.WriteString(htmlBody)
+	return []byte(msg.String())
+}
+
+func (s *EmailService) sendSMTP(to, subject, htmlBody string) error {
+	client, err := s.dialSMTP()
+	if err != nil {
+		return fmt.Errorf("smtp: เชื่อมต่อ %s:%s ไม่สำเร็จ: %w", s.smtp.Host, s.smtp.Port, err)
+	}
+	defer client.Close()
+
+	auth := smtp.PlainAuth("", s.smtp.Username, s.smtp.Password, s.smtp.Host)
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp: ล็อกอินไม่ผ่าน (ตรวจ SMTP_USERNAME / SMTP_PASSWORD): %w", err)
+	}
+
+	from := s.fromAddress()
+	if err := client.Mail(from); err != nil {
+		return fmt.Errorf("smtp: เซิร์ฟเวอร์ไม่ยอมให้ส่งในนาม %s: %w", from, err)
+	}
+	if err := client.Rcpt(to); err != nil {
+		return fmt.Errorf("smtp: ปลายทาง %s ถูกปฏิเสธ: %w", to, err)
+	}
+
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(s.buildMessage(to, subject, htmlBody)); err != nil {
+		w.Close()
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
+}
+
+// dialSMTP รองรับทั้งสองรูปแบบที่ผู้ให้บริการใช้กัน
+//
+//	พอร์ต 465 — TLS ตั้งแต่วินาทีแรก (implicit)
+//	พอร์ตอื่น  — ต่อธรรมดาแล้วยก TLS ด้วย STARTTLS (587 คือค่ามาตรฐาน)
+//
+// ถ้าเซิร์ฟเวอร์ไม่รองรับ STARTTLS จะเลิกทำทันที ไม่ยอมส่งรหัสผ่านผ่านช่องทางที่ไม่ได้เข้ารหัส
+func (s *EmailService) dialSMTP() (*smtp.Client, error) {
+	addr := net.JoinHostPort(s.smtp.Host, s.smtp.Port)
+	dialer := &net.Dialer{Timeout: smtpTimeout}
+	tlsConfig := &tls.Config{ServerName: s.smtp.Host, MinVersion: tls.VersionTLS12}
+
+	if s.smtp.Port == "465" {
+		conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
+		if err != nil {
+			return nil, err
+		}
+		_ = conn.SetDeadline(time.Now().Add(smtpTimeout))
+		return smtp.NewClient(conn, s.smtp.Host)
+	}
+
+	conn, err := dialer.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	_ = conn.SetDeadline(time.Now().Add(smtpTimeout))
+
+	client, err := smtp.NewClient(conn, s.smtp.Host)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	if ok, _ := client.Extension("STARTTLS"); !ok {
+		client.Close()
+		return nil, fmt.Errorf("เซิร์ฟเวอร์ไม่รองรับ STARTTLS — ปฏิเสธการส่งรหัสผ่านแบบไม่เข้ารหัส")
+	}
+	if err := client.StartTLS(tlsConfig); err != nil {
+		client.Close()
+		return nil, err
+	}
+	return client, nil
+}
+
+func (s *EmailService) sendGmailAPI(to, subject, htmlBody string) error {
 	from := s.config.SenderEmail
 	if from == "" {
 		from = "me"
@@ -70,7 +209,7 @@ func (s *EmailService) Send(to, subject, htmlBody string) error {
 	var msg strings.Builder
 	fmt.Fprintf(&msg, "From: %s\r\n", from)
 	fmt.Fprintf(&msg, "To: %s\r\n", to)
-	fmt.Fprintf(&msg, "Subject: %s\r\n", subject)
+	fmt.Fprintf(&msg, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
 	msg.WriteString(htmlBody)

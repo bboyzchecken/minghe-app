@@ -31,6 +31,7 @@ type Config struct {
 
 	MySQL     MySQLConfig
 	Redis     RedisConfig
+	SMTP      SMTPConfig
 	GoogleAPI GoogleAPIConfig
 	OAuth     OAuthConfig
 	R2        R2Config
@@ -52,7 +53,29 @@ type RedisConfig struct {
 	Password string
 }
 
-// GoogleAPIConfig — บัญชีที่ใช้ส่งอีเมล OTP ผ่าน Gmail API
+// SMTPConfig — ช่องทางหลักในการส่งอีเมล OTP (ตั้งแต่ 9 ก.ย. 2569)
+//
+// ย้ายจาก Gmail API มาใช้ SMTP ตรง เพราะ scope gmail.send เป็น sensitive scope
+// ที่ Google บล็อกการอนุญาตทั้งหมดจนกว่าแอปจะผ่านการตรวจ ("Access blocked:
+// … has not completed the Google verification process") ซึ่งใช้เวลาเป็นสัปดาห์
+//
+// ส่งผ่าน SMTP ของ GoDaddy ในนาม info@minghe.work ยังได้เปรียบอีกข้อ:
+// SPF ของโดเมนคือ `v=spf1 include:secureserver.net -all` อยู่แล้ว จึงผ่าน SPF
+// ทันทีโดยไม่ต้องแตะ DNS — ต่างจากการส่งผ่าน Google ที่ต้องเพิ่ม include ก่อน
+//
+// ตั้ง Host ว่างไว้ = ไม่ใช้ช่องทางนี้ แล้วระบบจะถอยไปใช้ Gmail API ตามเดิม
+type SMTPConfig struct {
+	Host     string
+	Port     string
+	Username string
+	Password string
+	/** ที่อยู่ผู้ส่งที่แสดงในอีเมล — เว้นว่าง = ใช้ Username */
+	SenderEmail string
+	/** ชื่อที่แสดงหน้าที่อยู่ เช่น 命合 Mìnghé */
+	SenderName string
+}
+
+// GoogleAPIConfig — บัญชีที่ใช้ส่งอีเมล OTP ผ่าน Gmail API (ช่องทางสำรอง)
 type GoogleAPIConfig struct {
 	ClientID     string
 	ClientSecret string

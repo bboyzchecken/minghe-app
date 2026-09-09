@@ -786,111 +786,91 @@ Invoke-RestMethod https://api.minghe.work/healthz
 
 ---
 
-## 15. ขอ GMAIL_* — credential สำหรับส่ง OTP
+## 15. ตั้งค่าส่งอีเมล OTP — SMTP ของ GoDaddy
 
-ไม่มีชุดนี้ = `apps/api/pkg/services/email/email.service.go` เขียน log ว่า
-`gmail credentials not configured` แล้ว **กลืนอีเมลทิ้งเงียบ ๆ โดยไม่ error** — ผู้ใช้จะสมัครสมาชิกไม่ได้เพราะไม่ได้รับ OTP
+> **เปลี่ยนจาก Gmail API เมื่อ 9 ก.ย. 2569** — scope `gmail.send` เป็น *sensitive scope*
+> พอกด Publish app เป็น *In production* ทั้งที่ยังไม่ผ่านการตรวจของ Google จะโดนบล็อกทันทีด้วยข้อความ
+> *"Access blocked: … has not completed the Google verification process"* และการอยู่ใน *Testing* ต่อ
+> ก็ทำให้ refresh token ตายทุก 7 วัน — ไม่มีทางไหนใช้กับ production ได้จริง
+>
+> SMTP ของ GoDaddy ยังได้เปรียบอีกข้อ: SPF ของโดเมนคือ `v=spf1 include:secureserver.net -all` อยู่แล้ว
+> ส่งจาก `info@minghe.work` จึงผ่าน SPF ทันทีโดยไม่ต้องแตะ DNS เลย (ต่างจากส่งผ่าน Google ที่ต้องเพิ่ม include ก่อน)
 
-โค้ดต้องการอะไรบ้าง (อ่านจากตัว service จริง):
-- scope เดียวคือ **`https://www.googleapis.com/auth/gmail.send`**
-- ส่งด้วย `Users.Messages.Send("me", ...)` = ส่งในนามบัญชีที่อนุญาต แล้วตั้งเฮดเดอร์ `From:` เป็น `GMAIL_SENDER_EMAIL`
-- `GMAIL_ACCESS_TOKEN` **เว้นว่างได้** — ไลบรารี oauth2 ของ Go เห็นว่า access token ว่างก็จะไปขอใหม่จาก refresh token เอง
+### 15.0 🔴 ยืนยันก่อนว่ามีกล่องจดหมายจริง
 
-### 15.0 ตัดสินก่อน — จะส่งจากบัญชีไหน
+MX ของโดเมนชี้ `secureserver.net` **แต่นั่นยังไม่ได้แปลว่ามีกล่องจดหมาย** — GoDaddy ตั้ง MX ชุดนี้ให้ทุกโดเมน
+ตั้งแต่ยังไม่ได้ซื้อแพ็กอีเมล ต้องเข้าไปเช็กจริง:
 
-MX ของ `minghe.work` ชี้ไป `secureserver.net` (GoDaddy) แปลว่า `info@minghe.work` **ไม่ใช่กล่องจดหมายของ Google**
-Gmail API ส่งในนามที่อยู่ที่บัญชีนั้นเป็นเจ้าของเท่านั้น ถ้าใส่ `From:` เป็นที่อยู่ที่ไม่ได้เป็นเจ้าของ Gmail จะ**เขียนทับกลับเป็นที่อยู่จริงเงียบ ๆ**
+**GoDaddy → My Products → Email & Office** — ต้องเห็น `info@minghe.work` และล็อกอิน [email.godaddy.com](https://email.godaddy.com) เข้าได้
 
-| ทาง | ทำอะไร | ข้อแลกเปลี่ยน |
-|---|---|---|
-| **ก** | ใช้บัญชี `@gmail.com` ที่มีอยู่ แล้วตั้ง `GMAIL_SENDER_EMAIL` เป็นที่อยู่นั้น | เร็วที่สุด · ผู้รับเห็นชื่อผู้ส่งเป็น gmail ไม่ใช่โดเมนตัวเอง |
-| **ข** | เพิ่ม `info@minghe.work` เป็น *Send mail as* ในบัญชี Gmail นั้น | ต้องมีรหัส SMTP ของกล่อง GoDaddy + ยืนยันทางอีเมล · **ต้องแก้ SPF ตาม §0 ข้อ 4 ด้วย** ไม่งั้นเข้า spam |
-| **ค** | ซื้อ Google Workspace ให้โดเมน แล้วย้าย MX มา Google | สะอาดที่สุดระยะยาว · มีค่าใช้จ่ายรายเดือนและต้องย้ายอีเมลเดิม |
+- ไม่มีกล่องจดหมาย → ซื้อแพ็ก Email & Office ก่อน (ถูกที่สุดประมาณ 60–100 บาท/เดือน) หรือเปลี่ยนไปใช้ Resend/Brevo แทน
+- มีแล้วแต่จำรหัสไม่ได้ → รีเซ็ตในหน้าเดียวกัน ต้องใช้รหัสนี้เป็น `SMTP_PASSWORD`
 
-รอบแรกแนะนำ **ทาง ก** ให้ระบบเดินได้ก่อน แล้วค่อยขยับไป ข หรือ ค ทีหลัง — เปลี่ยนแค่ `.env` ไม่ต้องแก้โค้ด
+### 15.1 ใส่ค่าใน `/opt/minghe/.env`
 
-### 15.1 เปิด Gmail API ใน Google Cloud
-
-1. [console.cloud.google.com](https://console.cloud.google.com) → **Select a project → New Project** ชื่อ `minghe-mail`
-2. **APIs & Services → Library** → ค้น `Gmail API` → **Enable**
-
-### 15.2 ตั้ง OAuth consent screen
-
-**APIs & Services → OAuth consent screen** (ในหน้าใหม่คือ *Google Auth Platform*)
-
-| ช่อง | ค่า |
-|---|---|
-| User type / Audience | **External** |
-| App name | `Mìnghé` |
-| User support email | บัญชีที่จะใช้ส่ง |
-| Developer contact | อีเมลเดียวกัน |
-
-จากนั้น **Data access → Add scopes** → ใส่ `https://www.googleapis.com/auth/gmail.send` (ค้นด้วยคำว่า `gmail.send`)
-
-> 🔴 **ขั้นที่พลาดกันมากที่สุด: ต้องกด `PUBLISH APP` ให้สถานะเป็น *In production***
-> ถ้าปล่อยไว้ที่ *Testing* **refresh token จะหมดอายุใน 7 วัน** — ระบบจะส่ง OTP ได้อาทิตย์เดียวแล้วเงียบไปเฉย ๆ
-> ตอน publish Google จะเตือนเรื่องการยืนยันแอป กด **Publish** ต่อได้เลย เพราะแอปนี้มีผู้ใช้คือเจ้าของเองบัญชีเดียว
-> (ผลคือตอน authorize จะเห็นหน้าจอ "Google hasn't verified this app" ครั้งเดียว กด *Advanced → Go to Mìnghé (unsafe)* ผ่านไป)
-
-### 15.3 สร้าง OAuth client
-
-**APIs & Services → Credentials → Create credentials → OAuth client ID**
-
-| ช่อง | ค่า |
-|---|---|
-| Application type | **Web application** |
-| Name | `minghe-mail-playground` |
-| Authorized redirect URIs | `https://developers.google.com/oauthplayground` |
-
-กด Create → เก็บ **Client ID** (`...apps.googleusercontent.com`) และ **Client secret** (`GOCSPX-...`)
-
-### 15.4 แลก refresh token ที่ OAuth Playground
-
-1. เปิด [developers.google.com/oauthplayground](https://developers.google.com/oauthplayground)
-2. กด **เฟือง** มุมขวาบน → ติ๊ก **Use your own OAuth credentials** → วาง Client ID / Client secret
-3. ช่องซ้าย **Input your own scopes** → วาง `https://www.googleapis.com/auth/gmail.send` → **Authorize APIs**
-4. ล็อกอิน**ด้วยบัญชีที่จะใช้ส่งจริง** → ผ่านหน้าเตือน unverified → **Allow**
-5. กลับมาที่ Playground กด **Exchange authorization code for tokens**
-6. คัดลอกค่า **Refresh token** (ขึ้นต้นด้วย `1//`)
-
-> refresh token แสดงเฉพาะครั้งแรกที่อนุญาต ถ้าเผลอปิดหน้าไปก่อนคัดลอก ให้ไปที่
-> [myaccount.google.com/permissions](https://myaccount.google.com/permissions) ถอนสิทธิ์แอปนั้นแล้วทำข้อ 3–6 ใหม่
-
-### 15.5 ใส่ค่าใน `/opt/minghe/.env`
-
-🖥️ บน Droplet:
-
-```bash
-nano /opt/minghe/.env
-```
+🖥️ บน Droplet: `nano /opt/minghe/.env`
 
 ```ini
-GMAIL_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
-GMAIL_CLIENT_SECRET=GOCSPX-xxxxxxxx
-GMAIL_REFRESH_TOKEN=1//0gxxxxxxxx
-GMAIL_ACCESS_TOKEN=
-GMAIL_SENDER_EMAIL=<ที่อยู่ของบัญชีที่อนุญาตไว้>
+SMTP_HOST=smtpout.secureserver.net
+SMTP_PORT=587
+SMTP_USERNAME=info@minghe.work
+SMTP_PASSWORD=<รหัสผ่านของกล่องจดหมาย>
+SMTP_SENDER_EMAIL=info@minghe.work
+SMTP_SENDER_NAME=命合 Mìnghé
+
+# ต้องเป็น false ไม่งั้นระบบโชว์รหัสบนหน้าจอแทนการส่งอีเมล
 MINGHE_OTP_ECHO=false
 ```
 
+`SMTP_PORT` เว้นว่างได้ ระบบใช้ `587` เป็นค่าเริ่มต้น · `SMTP_SENDER_NAME` เว้นว่างได้เช่นกัน
+
+> **`SMTP_SENDER_EMAIL` ต้องเป็นที่อยู่เดียวกับ `SMTP_USERNAME`** — GoDaddy ปฏิเสธการส่งในนามที่อยู่อื่น
+> ด้วย `not allowed to send as` เข้มกว่าผู้ให้บริการทั่วไป
+
+ยกระบบใหม่แล้วดู log:
+
 ```bash
-cd /opt/minghe && docker compose up -d && docker compose logs api --tail 30 | grep -i gmail
+cd /opt/minghe && docker compose up -d && docker compose logs api --tail 30 | grep -i "email\|smtp"
 ```
 
-**ไม่มีบรรทัด `gmail credentials not configured` = ต่อติดแล้ว**
+เห็นบรรทัด `email: ส่งผ่าน SMTP smtpout.secureserver.net:587 ในนาม info@minghe.work` = ต่อติดแล้ว
+ถ้าเห็น `email credentials not configured` แปลว่า `SMTP_HOST` หรือ `SMTP_USERNAME` ยังว่างอยู่
 
-### 15.6 ทดสอบว่าส่งถึงจริง
+### 15.2 ทดสอบว่าส่งถึงจริง
 
 สมัครสมาชิกจริงหนึ่งบัญชีที่ `https://minghe.work/register` แล้วเปิดเมลที่ได้ → **Show original** ตรวจสามบรรทัด:
 
-| หัวข้อ | ต้องได้ |
-|---|---|
-| `SPF` | `PASS` — ถ้า `FAIL` แปลว่าใช้ทาง ข โดยยังไม่แก้ SPF (§0 ข้อ 4) |
-| `DKIM` | `PASS` |
-| `From` | ตรงกับ `GMAIL_SENDER_EMAIL` — ถ้าถูกเขียนทับเป็นที่อยู่อื่น แปลว่าบัญชีไม่ได้เป็นเจ้าของที่อยู่นั้น |
+| หัวข้อ | ต้องได้ | ถ้าไม่ได้ |
+|---|---|---|
+| `SPF` | `PASS` | ตรวจว่า `SMTP_SENDER_EMAIL` เป็น `@minghe.work` จริง |
+| `DKIM` | `PASS` | GoDaddy เซ็นให้เองตามแพ็ก — ถ้า `none` ให้เปิด DKIM ในหน้าจัดการอีเมล |
+| `From` | `命合 Mìnghé <info@minghe.work>` | ถูกเขียนทับ = ส่งในนามที่อยู่ที่บัญชีไม่ได้เป็นเจ้าของ |
 
-### 15.7 ข้อจำกัดที่ต้องรู้ก่อนเปิดขาย
+ถ้าส่งไม่ออก ดู error เต็ม ๆ ที่ `docker compose logs api --tail 50` — ข้อความถูกเขียนให้บอกสาเหตุตรง ๆ
+(`ล็อกอินไม่ผ่าน` / `เซิร์ฟเวอร์ไม่ยอมให้ส่งในนาม …` / `เชื่อมต่อ … ไม่สำเร็จ`)
 
-- บัญชี `@gmail.com` ส่งได้ **~500 ฉบับ/วัน** · Google Workspace **~2,000 ฉบับ/วัน** — เกินแล้วถูกระงับชั่วคราว 24 ชม.
-- ถ้ายอดสมัครโตเกินนั้น ให้ย้ายไปผู้ให้บริการส่งอีเมลโดยเฉพาะ (Resend / SendGrid / Amazon SES) ซึ่งต้องแก้ `email.service.go`
-- ถอนสิทธิ์แอปใน [myaccount.google.com/permissions](https://myaccount.google.com/permissions) เมื่อไร refresh token ตายทันที ระบบจะส่ง OTP ไม่ได้
+### 15.3 ถ้ากล่องจดหมายเป็น GoDaddy Microsoft 365
+
+GoDaddy ขายอีเมลสองระบบ ดูจาก MX ของโดเมน:
+
+| MX ชี้ไป | ระบบ | `SMTP_HOST` |
+|---|---|---|
+| `*.secureserver.net` (ตอนนี้เป็นแบบนี้) | Workspace Email แบบเดิม | `smtpout.secureserver.net` |
+| `*.mail.protection.outlook.com` | Professional Email (Microsoft 365) | `smtp.office365.com` |
+
+ถ้าย้ายไป M365 วันไหน แก้แค่ `SMTP_HOST` ใน `.env` แล้ว `docker compose up -d` — ไม่ต้อง build ใหม่
+(M365 อาจต้องเปิด *Authenticated SMTP* ในบัญชีนั้นก่อน และถ้าเปิด MFA ต้องใช้ App Password)
+
+### 15.4 ข้อจำกัดและทางหนีทีไล่
+
+- GoDaddy Workspace Email จำกัดราว **250–500 ฉบับ/วัน** ต่อกล่อง เกินแล้วถูกระงับชั่วคราว
+- ถ้ายอดสมัครโตเกินนั้น หรืออีเมลเริ่มตกถังขยะบ่อย ให้ย้ายไป **Resend / Brevo / Amazon SES**
+  — โค้ดรองรับไว้แล้วในระดับ config: ผู้ให้บริการเหล่านี้ล้วนมี SMTP relay จึงเปลี่ยนแค่ `SMTP_*` ใน `.env`
+  ไม่ต้องแก้ `email.service.go` (ต่างจากตอนใช้ Gmail API ที่ผูกกับ SDK ของ Google)
+- ผู้ให้บริการเหล่านั้นต้องเพิ่ม DKIM/SPF ของตัวเองใน Cloudflare ด้วย ไม่งั้น SPF ที่ตั้งไว้ตอนนี้จะทำให้เมลตก
+
+### 15.5 Gmail API — ยังใช้ได้แต่ไม่แนะนำ
+
+โค้ดยังเหลือทางนี้ไว้เป็นช่องทางสำรอง: ถ้า `SMTP_HOST` ว่างและมี `GMAIL_CLIENT_ID` + `GMAIL_REFRESH_TOKEN`
+ระบบจะกลับไปส่งผ่าน Gmail API เอง คุ้มที่จะใช้ก็ต่อเมื่อมี **Google Workspace ของโดเมนเอง**
+เพราะตั้ง OAuth app เป็น *Internal* ได้ ซึ่งไม่ต้องผ่าน verification และ refresh token ไม่หมดอายุ
