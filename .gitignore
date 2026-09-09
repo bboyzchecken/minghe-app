@@ -14,6 +14,10 @@ next-env.d.ts
 .env
 .env.local
 .env*.local
+# ไฟล์ credential ที่ดาวน์โหลดจาก Google Cloud Console มาทั้งก้อน
+# (GitHub push protection บล็อกให้อยู่แล้ว แต่กันไว้ตั้งแต่ต้นทางดีกว่า)
+client_secret_*.json
+*-service-account.json
 
 # Go
 apps/api/artifacts/
