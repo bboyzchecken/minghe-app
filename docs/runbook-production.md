@@ -786,91 +786,92 @@ Invoke-RestMethod https://api.minghe.work/healthz
 
 ---
 
-## 15. ตั้งค่าส่งอีเมล OTP — SMTP ของ GoDaddy
+## 15. ตั้งค่าส่งอีเมล OTP — Resend
 
-> **เปลี่ยนจาก Gmail API เมื่อ 9 ก.ย. 2569** — scope `gmail.send` เป็น *sensitive scope*
-> พอกด Publish app เป็น *In production* ทั้งที่ยังไม่ผ่านการตรวจของ Google จะโดนบล็อกทันทีด้วยข้อความ
-> *"Access blocked: … has not completed the Google verification process"* และการอยู่ใน *Testing* ต่อ
-> ก็ทำให้ refresh token ตายทุก 7 วัน — ไม่มีทางไหนใช้กับ production ได้จริง
+### 15.0 ทำไมไม่ใช่ SMTP และไม่ใช่ Gmail API
+
+ลองมาแล้วทั้งสองทาง ตันทั้งคู่ด้วยเหตุผลคนละแบบ:
+
+| ทาง | ผลจริง |
+|---|---|
+| **Gmail API** | `gmail.send` เป็น *sensitive scope* — publish เป็น In production ทั้งที่ยังไม่ผ่านการตรวจ โดนบล็อกด้วย *"Access blocked: … has not completed the Google verification process"* · อยู่ใน Testing ต่อก็ทำให้ refresh token ตายทุก 7 วัน |
+| **SMTP (GoDaddy)** | **DigitalOcean บล็อกพอร์ต SMTP ขาออกทุกพอร์ต** — ทดสอบจาก Droplet แล้วตันหมดทั้ง `25` `80` `465` `587` `3535` · ขอปลดล็อกต้องเปิด ticket รอหลายวันโดยไม่รับประกันผล |
+| **Resend** | ส่งผ่าน **HTTPS พอร์ต 443** ซึ่งเป็นพอร์ตเดียวกับที่ `docker pull` และ Let's Encrypt ใช้อยู่แล้ว จึงไม่มีทางถูกนโยบายกันสแปมบล็อก |
+
+โค้ดเลือกช่องทางตามลำดับ **Resend → SMTP → Gmail API → log เท่านั้น** สลับได้ด้วยการแก้ `.env` อย่างเดียว ไม่ต้อง build ใหม่
+
+### 15.1 สมัครและยืนยันโดเมน
+
+1. สมัครที่ [resend.com](https://resend.com) (free 3,000 ฉบับ/เดือน · 100 ฉบับ/วัน)
+2. **Domains → Add Domain** → ใส่ `minghe.work` → เลือก region **ap-northeast-1 (Tokyo)** ใกล้ผู้ใช้ไทยที่สุด
+3. Resend จะแสดงเรกคอร์ด DNS 3 รายการให้เอาไปใส่
+
+### 15.2 ใส่เรกคอร์ดใน Cloudflare
+
+**Cloudflare → DNS → Records → Add record** ตามที่หน้า Resend บอก หน้าตาประมาณนี้:
+
+| Type | Name | Content | Proxy |
+|---|---|---|---|
+| MX | `send` | `feedback-smtp.ap-northeast-1.amazonses.com` (priority 10) | — |
+| TXT | `send` | `v=spf1 include:amazonses.com ~all` | — |
+| TXT | `resend._domainkey` | คีย์ DKIM ยาว ๆ ที่ Resend ให้มา | — |
+
+> ✅ **MX ของอีเมลเดิมไม่กระทบ** — เรกคอร์ดพวกนี้อยู่บนซับโดเมน `send.minghe.work`
+> กล่องจดหมาย `info@minghe.work` ที่ GoDaddy ยังรับเมลเข้าได้ตามปกติ
 >
-> SMTP ของ GoDaddy ยังได้เปรียบอีกข้อ: SPF ของโดเมนคือ `v=spf1 include:secureserver.net -all` อยู่แล้ว
-> ส่งจาก `info@minghe.work` จึงผ่าน SPF ทันทีโดยไม่ต้องแตะ DNS เลย (ต่างจากส่งผ่าน Google ที่ต้องเพิ่ม include ก่อน)
+> ✅ **ไม่ต้องแก้ SPF ของโดเมนหลัก** — SPF ปัจจุบัน `v=spf1 include:secureserver.net -all` อยู่เหมือนเดิม
+> เพราะ Return-Path ของ Resend อยู่บน `send.minghe.work` และ DMARC ผ่านทาง DKIM ที่เซ็นด้วย `d=minghe.work`
 
-### 15.0 🔴 ยืนยันก่อนว่ามีกล่องจดหมายจริง
+กลับไปกด **Verify** ที่หน้า Resend — DNS อยู่ Cloudflare อยู่แล้วจึงมักผ่านใน 1–5 นาที
 
-MX ของโดเมนชี้ `secureserver.net` **แต่นั่นยังไม่ได้แปลว่ามีกล่องจดหมาย** — GoDaddy ตั้ง MX ชุดนี้ให้ทุกโดเมน
-ตั้งแต่ยังไม่ได้ซื้อแพ็กอีเมล ต้องเข้าไปเช็กจริง:
+### 15.3 สร้าง API key แล้วใส่ใน `.env`
 
-**GoDaddy → My Products → Email & Office** — ต้องเห็น `info@minghe.work` และล็อกอิน [email.godaddy.com](https://email.godaddy.com) เข้าได้
-
-- ไม่มีกล่องจดหมาย → ซื้อแพ็ก Email & Office ก่อน (ถูกที่สุดประมาณ 60–100 บาท/เดือน) หรือเปลี่ยนไปใช้ Resend/Brevo แทน
-- มีแล้วแต่จำรหัสไม่ได้ → รีเซ็ตในหน้าเดียวกัน ต้องใช้รหัสนี้เป็น `SMTP_PASSWORD`
-
-### 15.1 ใส่ค่าใน `/opt/minghe/.env`
+**Resend → API Keys → Create API Key** → สิทธิ์ **Sending access** → คัดลอกค่า `re_...` (แสดงครั้งเดียว)
 
 🖥️ บน Droplet: `nano /opt/minghe/.env`
 
 ```ini
-SMTP_HOST=smtpout.secureserver.net
-SMTP_PORT=587
-SMTP_USERNAME=info@minghe.work
-SMTP_PASSWORD=<รหัสผ่านของกล่องจดหมาย>
-SMTP_SENDER_EMAIL=info@minghe.work
-SMTP_SENDER_NAME=命合 Mìnghé
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxx
+MAIL_SENDER_EMAIL=info@minghe.work
+MAIL_SENDER_NAME=命合 Mìnghé
 
 # ต้องเป็น false ไม่งั้นระบบโชว์รหัสบนหน้าจอแทนการส่งอีเมล
 MINGHE_OTP_ECHO=false
 ```
 
-`SMTP_PORT` เว้นว่างได้ ระบบใช้ `587` เป็นค่าเริ่มต้น · `SMTP_SENDER_NAME` เว้นว่างได้เช่นกัน
-
-> **`SMTP_SENDER_EMAIL` ต้องเป็นที่อยู่เดียวกับ `SMTP_USERNAME`** — GoDaddy ปฏิเสธการส่งในนามที่อยู่อื่น
-> ด้วย `not allowed to send as` เข้มกว่าผู้ให้บริการทั่วไป
-
-ยกระบบใหม่แล้วดู log:
+`MAIL_SENDER_EMAIL` เว้นว่างได้ถ้าตั้ง `SMTP_SENDER_EMAIL` ไว้แล้ว — โค้ดใช้ค่านั้นแทนให้เอง
+ค่า `SMTP_*` ที่ค้างอยู่ไม่ต้องลบ Resend มาก่อนอยู่แล้วตามลำดับใน §15.0
 
 ```bash
-cd /opt/minghe && docker compose up -d && docker compose logs api --tail 30 | grep -i "email\|smtp"
+cd /opt/minghe && docker compose up -d --force-recreate api && docker compose logs api --tail 20 | grep -i email
 ```
 
-เห็นบรรทัด `email: ส่งผ่าน SMTP smtpout.secureserver.net:587 ในนาม info@minghe.work` = ต่อติดแล้ว
-ถ้าเห็น `email credentials not configured` แปลว่า `SMTP_HOST` หรือ `SMTP_USERNAME` ยังว่างอยู่
+ต้องเห็น `email: ส่งผ่าน Resend ในนาม 命合 Mìnghé <info@minghe.work>`
 
-### 15.2 ทดสอบว่าส่งถึงจริง
+### 15.4 ทดสอบว่าส่งถึงจริง
 
-สมัครสมาชิกจริงหนึ่งบัญชีที่ `https://minghe.work/register` แล้วเปิดเมลที่ได้ → **Show original** ตรวจสามบรรทัด:
+เปิด log ค้างไว้แล้วสมัครสมาชิกจริงหนึ่งบัญชีที่ `https://minghe.work/register`:
 
-| หัวข้อ | ต้องได้ | ถ้าไม่ได้ |
-|---|---|---|
-| `SPF` | `PASS` | ตรวจว่า `SMTP_SENDER_EMAIL` เป็น `@minghe.work` จริง |
-| `DKIM` | `PASS` | GoDaddy เซ็นให้เองตามแพ็ก — ถ้า `none` ให้เปิด DKIM ในหน้าจัดการอีเมล |
-| `From` | `命合 Mìnghé <info@minghe.work>` | ถูกเขียนทับ = ส่งในนามที่อยู่ที่บัญชีไม่ได้เป็นเจ้าของ |
+```bash
+cd /opt/minghe && docker compose logs -f api | grep -iE "otp|resend|error"
+```
 
-ถ้าส่งไม่ออก ดู error เต็ม ๆ ที่ `docker compose logs api --tail 50` — ข้อความถูกเขียนให้บอกสาเหตุตรง ๆ
-(`ล็อกอินไม่ผ่าน` / `เซิร์ฟเวอร์ไม่ยอมให้ส่งในนาม …` / `เชื่อมต่อ … ไม่สำเร็จ`)
+ไม่มีบรรทัด `cannot send otp email` = ส่งออกแล้ว · ถ้ามี ข้อความหลังคำว่า `resend:` คือคำตอบจาก API ตรง ๆ:
 
-### 15.3 ถ้ากล่องจดหมายเป็น GoDaddy Microsoft 365
+| ตอบกลับ | สาเหตุ |
+|---|---|
+| `403 … domain is not verified` | ยังไม่ผ่าน Verify ในข้อ 15.2 |
+| `401 … API key is invalid` | คีย์ผิด หรือคัดลอกไม่ครบ |
+| `422 … Invalid from field` | `MAIL_SENDER_EMAIL` ไม่ได้อยู่ในโดเมนที่ยืนยัน |
 
-GoDaddy ขายอีเมลสองระบบ ดูจาก MX ของโดเมน:
+เปิดเมลที่ได้ → **Show original** → ต้องได้ `DKIM: PASS` และ `DMARC: PASS`
+(`SPF` อาจขึ้นเป็นโดเมน `send.minghe.work` ซึ่งถูกต้องแล้ว ไม่ใช่ความผิดพลาด)
 
-| MX ชี้ไป | ระบบ | `SMTP_HOST` |
-|---|---|---|
-| `*.secureserver.net` (ตอนนี้เป็นแบบนี้) | Workspace Email แบบเดิม | `smtpout.secureserver.net` |
-| `*.mail.protection.outlook.com` | Professional Email (Microsoft 365) | `smtp.office365.com` |
+ดูสถานะรายฉบับได้ที่ **Resend → Emails** บอกได้ว่าส่งออก ตีกลับ หรือถูกปฏิเสธ ซึ่ง SMTP ไม่มีให้
 
-ถ้าย้ายไป M365 วันไหน แก้แค่ `SMTP_HOST` ใน `.env` แล้ว `docker compose up -d` — ไม่ต้อง build ใหม่
-(M365 อาจต้องเปิด *Authenticated SMTP* ในบัญชีนั้นก่อน และถ้าเปิด MFA ต้องใช้ App Password)
+### 15.5 ข้อจำกัดและการโตต่อ
 
-### 15.4 ข้อจำกัดและทางหนีทีไล่
-
-- GoDaddy Workspace Email จำกัดราว **250–500 ฉบับ/วัน** ต่อกล่อง เกินแล้วถูกระงับชั่วคราว
-- ถ้ายอดสมัครโตเกินนั้น หรืออีเมลเริ่มตกถังขยะบ่อย ให้ย้ายไป **Resend / Brevo / Amazon SES**
-  — โค้ดรองรับไว้แล้วในระดับ config: ผู้ให้บริการเหล่านี้ล้วนมี SMTP relay จึงเปลี่ยนแค่ `SMTP_*` ใน `.env`
-  ไม่ต้องแก้ `email.service.go` (ต่างจากตอนใช้ Gmail API ที่ผูกกับ SDK ของ Google)
-- ผู้ให้บริการเหล่านั้นต้องเพิ่ม DKIM/SPF ของตัวเองใน Cloudflare ด้วย ไม่งั้น SPF ที่ตั้งไว้ตอนนี้จะทำให้เมลตก
-
-### 15.5 Gmail API — ยังใช้ได้แต่ไม่แนะนำ
-
-โค้ดยังเหลือทางนี้ไว้เป็นช่องทางสำรอง: ถ้า `SMTP_HOST` ว่างและมี `GMAIL_CLIENT_ID` + `GMAIL_REFRESH_TOKEN`
-ระบบจะกลับไปส่งผ่าน Gmail API เอง คุ้มที่จะใช้ก็ต่อเมื่อมี **Google Workspace ของโดเมนเอง**
-เพราะตั้ง OAuth app เป็น *Internal* ได้ ซึ่งไม่ต้องผ่าน verification และ refresh token ไม่หมดอายุ
+- free tier **100 ฉบับ/วัน · 3,000 ฉบับ/เดือน** — เกินแล้วต้องขยับเป็นแพ็กจ่ายเงิน (เริ่ม $20/เดือน ที่ 50,000 ฉบับ)
+- ถ้าย้ายผู้ให้บริการอีกในอนาคต เจ้าที่มี SMTP relay (Brevo, Amazon SES, Postmark) ใช้ `SMTP_*` ที่มีอยู่แล้วได้เลย
+  **แต่ต้องเป็นเครื่องที่ไม่ถูกบล็อกพอร์ต SMTP** ซึ่ง Droplet ตัวนี้ไม่ใช่ — บนเครื่องนี้ต้องเป็นผู้ให้บริการที่มี HTTP API เท่านั้น
+- ถอนหรือลบ API key ใน Resend เมื่อไร ระบบส่ง OTP ไม่ได้ทันที

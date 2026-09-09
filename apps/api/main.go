@@ -132,6 +132,12 @@ func loadConfig() core.Config {
 			Port:     viper.GetString("REDIS_PORT"),
 			Password: viper.GetString("REDIS_PASSWORD"),
 		},
+		Resend: core.ResendConfig{
+			APIKey: viper.GetString("RESEND_API_KEY"),
+			// ผู้ส่งใช้ค่าเดียวกับฝั่ง SMTP ได้ ไม่ต้องตั้งซ้ำเวลาสลับช่องทาง
+			SenderEmail: firstNonEmpty(viper.GetString("MAIL_SENDER_EMAIL"), viper.GetString("SMTP_SENDER_EMAIL")),
+			SenderName:  firstNonEmpty(viper.GetString("MAIL_SENDER_NAME"), viper.GetString("SMTP_SENDER_NAME"), "命合 Mìnghé"),
+		},
 		SMTP: core.SMTPConfig{
 			Host:        viper.GetString("SMTP_HOST"),
 			Port:        firstNonEmpty(viper.GetString("SMTP_PORT"), "587"),

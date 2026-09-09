@@ -1,12 +1,16 @@
 package email
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"mime"
 	"net"
+	"net/http"
 	"net/smtp"
 	"strings"
 	"time"
@@ -24,22 +28,39 @@ import (
 // เมื่อเซิร์ฟเวอร์ปลายทางไม่ตอบ (net/smtp ไม่มี timeout ในตัว)
 const smtpTimeout = 20 * time.Second
 
+// resendEndpoint — REST API ของ Resend วิ่งผ่าน HTTPS จึงไม่โดนนโยบายบล็อก SMTP
+const resendEndpoint = "https://api.resend.com/emails"
+
 type EmailService struct {
 	config core.GoogleAPIConfig
+	resend core.ResendConfig
 	smtp   core.SMTPConfig
 	appURL string
 	svc    *gmail.Service
+	http   *http.Client
 }
 
 // New สร้าง service ส่งอีเมล โดยเลือกช่องทางตามค่าที่ตั้งไว้
 //
-//  1. SMTP        — ช่องทางหลัก ใช้เมื่อมี SMTP_HOST และ SMTP_USERNAME
-//  2. Gmail API   — ช่องทางสำรอง ใช้เมื่อมี GMAIL_CLIENT_ID และ GMAIL_REFRESH_TOKEN
-//  3. log เท่านั้น — ไม่มีทั้งสองอย่าง (โหมด dev รันได้โดยไม่ต้องมี credential)
+//  1. Resend      — ช่องทางหลัก ใช้เมื่อมี RESEND_API_KEY (ส่งผ่าน HTTPS พอร์ต 443)
+//  2. SMTP        — ใช้เมื่อมี SMTP_HOST และ SMTP_USERNAME
+//  3. Gmail API   — ใช้เมื่อมี GMAIL_CLIENT_ID และ GMAIL_REFRESH_TOKEN
+//  4. log เท่านั้น — ไม่มีสักอย่าง (โหมด dev รันได้โดยไม่ต้องมี credential)
 //
 // ลำดับนี้ทำให้สลับช่องทางได้ด้วยการแก้ .env อย่างเดียว ไม่ต้อง build ใหม่
 func New(cfg core.Config) *EmailService {
-	s := &EmailService{config: cfg.GoogleAPI, smtp: cfg.SMTP, appURL: cfg.AppBaseURL}
+	s := &EmailService{
+		config: cfg.GoogleAPI,
+		resend: cfg.Resend,
+		smtp:   cfg.SMTP,
+		appURL: cfg.AppBaseURL,
+		http:   &http.Client{Timeout: smtpTimeout},
+	}
+
+	if s.resendConfigured() {
+		logger.Info("email: ส่งผ่าน Resend ในนาม ", s.senderHeader())
+		return s
+	}
 
 	if s.smtpConfigured() {
 		logger.Info("email: ส่งผ่าน SMTP ", cfg.SMTP.Host, ":", cfg.SMTP.Port, " ในนาม ", s.fromAddress())
@@ -76,6 +97,8 @@ func New(cfg core.Config) *EmailService {
 // Send ส่งอีเมล HTML หนึ่งฉบับผ่านช่องทางที่ตั้งไว้
 func (s *EmailService) Send(to, subject, htmlBody string) error {
 	switch {
+	case s.resendConfigured():
+		return s.sendResend(to, subject, htmlBody)
 	case s.smtpConfigured():
 		return s.sendSMTP(to, subject, htmlBody)
 	case s.svc != nil:
@@ -85,6 +108,55 @@ func (s *EmailService) Send(to, subject, htmlBody string) error {
 			Info("email not sent (no mail transport configured)")
 		return nil
 	}
+}
+
+func (s *EmailService) resendConfigured() bool {
+	return s.resend.APIKey != "" && s.resend.SenderEmail != ""
+}
+
+// senderHeader ประกอบค่า From สำหรับ Resend
+//
+// ไม่ต้องเข้ารหัส RFC 2047 เอง — Resend รับ UTF-8 ตรง ๆ แล้วจัดการให้
+// (ต่างจากทาง SMTP ที่เราประกอบซองจดหมายเองจึงต้องเข้ารหัสก่อนส่ง)
+func (s *EmailService) senderHeader() string {
+	if s.resend.SenderName == "" {
+		return s.resend.SenderEmail
+	}
+	return fmt.Sprintf("%s <%s>", s.resend.SenderName, s.resend.SenderEmail)
+}
+
+func (s *EmailService) sendResend(to, subject, htmlBody string) error {
+	payload, err := json.Marshal(map[string]any{
+		"from":    s.senderHeader(),
+		"to":      []string{to},
+		"subject": subject,
+		"html":    htmlBody,
+	})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, resendEndpoint, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.resend.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := s.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("resend: เรียก API ไม่สำเร็จ: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode >= 200 && res.StatusCode < 300 {
+		return nil
+	}
+
+	// เนื้อความที่ Resend ตอบกลับบอกสาเหตุตรง ๆ เช่นโดเมนยังไม่ยืนยันหรือคีย์ผิด
+	// จำกัดความยาวกันไม่ให้ log บวมเวลาเจอหน้า error แบบ HTML
+	body, _ := io.ReadAll(io.LimitReader(res.Body, 2048))
+	return fmt.Errorf("resend: ตอบกลับ %s: %s", res.Status, strings.TrimSpace(string(body)))
 }
 
 func (s *EmailService) smtpConfigured() bool {

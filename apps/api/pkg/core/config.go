@@ -31,6 +31,7 @@ type Config struct {
 
 	MySQL     MySQLConfig
 	Redis     RedisConfig
+	Resend    ResendConfig
 	SMTP      SMTPConfig
 	GoogleAPI GoogleAPIConfig
 	OAuth     OAuthConfig
@@ -53,7 +54,23 @@ type RedisConfig struct {
 	Password string
 }
 
-// SMTPConfig — ช่องทางหลักในการส่งอีเมล OTP (ตั้งแต่ 9 ก.ย. 2569)
+// ResendConfig — ช่องทางหลักในการส่งอีเมล OTP (ตั้งแต่ 10 ก.ย. 2569)
+//
+// ย้ายมาจาก SMTP เพราะ DigitalOcean บล็อกพอร์ต SMTP ขาออกทุกพอร์ตของ Droplet นี้
+// (ทดสอบแล้วตันหมดทั้ง 25 / 80 / 465 / 587 / 3535) และการขอปลดล็อกต้องเปิด ticket
+// รอหลายวันโดยไม่รับประกันว่าจะได้
+//
+// Resend ส่งผ่าน HTTPS พอร์ต 443 จึงไม่มีทางถูกบล็อกด้วยนโยบายกันสแปมแบบเดียวกัน
+// ตั้ง APIKey ว่างไว้ = ไม่ใช้ช่องทางนี้ แล้วระบบจะถอยไปใช้ SMTP ตามเดิม
+type ResendConfig struct {
+	APIKey string
+	/** ที่อยู่ผู้ส่ง — ต้องอยู่ในโดเมนที่ยืนยันแล้วใน Resend */
+	SenderEmail string
+	/** ชื่อที่แสดงหน้าที่อยู่ เช่น 命合 Mìnghé */
+	SenderName string
+}
+
+// SMTPConfig — ช่องทางสำรองที่หนึ่ง (ใช้ไม่ได้บน Droplet ที่ถูกบล็อกพอร์ต SMTP)
 //
 // ย้ายจาก Gmail API มาใช้ SMTP ตรง เพราะ scope gmail.send เป็น sensitive scope
 // ที่ Google บล็อกการอนุญาตทั้งหมดจนกว่าแอปจะผ่านการตรวจ ("Access blocked:
