@@ -54,11 +54,14 @@ services:
     image: caddy:2-alpine
     environment:
       API_DOMAIN: ${API_DOMAIN:-api.minghe.work}
+      WEB_DOMAIN: ${WEB_DOMAIN:-uat.minghe.work}
     ports:
       - '80:80'
       - '443:443'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # static export ของ apps/app — อัปโหลดด้วย deploy-web.yml (rsync มาไว้ที่ /opt/minghe/web)
+      - ./web:/srv/web:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
