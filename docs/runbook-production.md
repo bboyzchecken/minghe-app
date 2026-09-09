@@ -782,3 +782,115 @@ Invoke-RestMethod https://api.minghe.work/healthz
 
 > `curl` ใน PowerShell 5.1 เป็นนามแฝงของ `Invoke-WebRequest` ไม่ใช่ curl จริง ธงแบบ `-sSI` จึงใช้ไม่ได้
 > ถ้าอยากใช้ curl จริงให้เรียก `curl.exe` เต็มชื่อ
+
+
+---
+
+## 15. ขอ GMAIL_* — credential สำหรับส่ง OTP
+
+ไม่มีชุดนี้ = `apps/api/pkg/services/email/email.service.go` เขียน log ว่า
+`gmail credentials not configured` แล้ว **กลืนอีเมลทิ้งเงียบ ๆ โดยไม่ error** — ผู้ใช้จะสมัครสมาชิกไม่ได้เพราะไม่ได้รับ OTP
+
+โค้ดต้องการอะไรบ้าง (อ่านจากตัว service จริง):
+- scope เดียวคือ **`https://www.googleapis.com/auth/gmail.send`**
+- ส่งด้วย `Users.Messages.Send("me", ...)` = ส่งในนามบัญชีที่อนุญาต แล้วตั้งเฮดเดอร์ `From:` เป็น `GMAIL_SENDER_EMAIL`
+- `GMAIL_ACCESS_TOKEN` **เว้นว่างได้** — ไลบรารี oauth2 ของ Go เห็นว่า access token ว่างก็จะไปขอใหม่จาก refresh token เอง
+
+### 15.0 ตัดสินก่อน — จะส่งจากบัญชีไหน
+
+MX ของ `minghe.work` ชี้ไป `secureserver.net` (GoDaddy) แปลว่า `info@minghe.work` **ไม่ใช่กล่องจดหมายของ Google**
+Gmail API ส่งในนามที่อยู่ที่บัญชีนั้นเป็นเจ้าของเท่านั้น ถ้าใส่ `From:` เป็นที่อยู่ที่ไม่ได้เป็นเจ้าของ Gmail จะ**เขียนทับกลับเป็นที่อยู่จริงเงียบ ๆ**
+
+| ทาง | ทำอะไร | ข้อแลกเปลี่ยน |
+|---|---|---|
+| **ก** | ใช้บัญชี `@gmail.com` ที่มีอยู่ แล้วตั้ง `GMAIL_SENDER_EMAIL` เป็นที่อยู่นั้น | เร็วที่สุด · ผู้รับเห็นชื่อผู้ส่งเป็น gmail ไม่ใช่โดเมนตัวเอง |
+| **ข** | เพิ่ม `info@minghe.work` เป็น *Send mail as* ในบัญชี Gmail นั้น | ต้องมีรหัส SMTP ของกล่อง GoDaddy + ยืนยันทางอีเมล · **ต้องแก้ SPF ตาม §0 ข้อ 4 ด้วย** ไม่งั้นเข้า spam |
+| **ค** | ซื้อ Google Workspace ให้โดเมน แล้วย้าย MX มา Google | สะอาดที่สุดระยะยาว · มีค่าใช้จ่ายรายเดือนและต้องย้ายอีเมลเดิม |
+
+รอบแรกแนะนำ **ทาง ก** ให้ระบบเดินได้ก่อน แล้วค่อยขยับไป ข หรือ ค ทีหลัง — เปลี่ยนแค่ `.env` ไม่ต้องแก้โค้ด
+
+### 15.1 เปิด Gmail API ใน Google Cloud
+
+1. [console.cloud.google.com](https://console.cloud.google.com) → **Select a project → New Project** ชื่อ `minghe-mail`
+2. **APIs & Services → Library** → ค้น `Gmail API` → **Enable**
+
+### 15.2 ตั้ง OAuth consent screen
+
+**APIs & Services → OAuth consent screen** (ในหน้าใหม่คือ *Google Auth Platform*)
+
+| ช่อง | ค่า |
+|---|---|
+| User type / Audience | **External** |
+| App name | `Mìnghé` |
+| User support email | บัญชีที่จะใช้ส่ง |
+| Developer contact | อีเมลเดียวกัน |
+
+จากนั้น **Data access → Add scopes** → ใส่ `https://www.googleapis.com/auth/gmail.send` (ค้นด้วยคำว่า `gmail.send`)
+
+> 🔴 **ขั้นที่พลาดกันมากที่สุด: ต้องกด `PUBLISH APP` ให้สถานะเป็น *In production***
+> ถ้าปล่อยไว้ที่ *Testing* **refresh token จะหมดอายุใน 7 วัน** — ระบบจะส่ง OTP ได้อาทิตย์เดียวแล้วเงียบไปเฉย ๆ
+> ตอน publish Google จะเตือนเรื่องการยืนยันแอป กด **Publish** ต่อได้เลย เพราะแอปนี้มีผู้ใช้คือเจ้าของเองบัญชีเดียว
+> (ผลคือตอน authorize จะเห็นหน้าจอ "Google hasn't verified this app" ครั้งเดียว กด *Advanced → Go to Mìnghé (unsafe)* ผ่านไป)
+
+### 15.3 สร้าง OAuth client
+
+**APIs & Services → Credentials → Create credentials → OAuth client ID**
+
+| ช่อง | ค่า |
+|---|---|
+| Application type | **Web application** |
+| Name | `minghe-mail-playground` |
+| Authorized redirect URIs | `https://developers.google.com/oauthplayground` |
+
+กด Create → เก็บ **Client ID** (`...apps.googleusercontent.com`) และ **Client secret** (`GOCSPX-...`)
+
+### 15.4 แลก refresh token ที่ OAuth Playground
+
+1. เปิด [developers.google.com/oauthplayground](https://developers.google.com/oauthplayground)
+2. กด **เฟือง** มุมขวาบน → ติ๊ก **Use your own OAuth credentials** → วาง Client ID / Client secret
+3. ช่องซ้าย **Input your own scopes** → วาง `https://www.googleapis.com/auth/gmail.send` → **Authorize APIs**
+4. ล็อกอิน**ด้วยบัญชีที่จะใช้ส่งจริง** → ผ่านหน้าเตือน unverified → **Allow**
+5. กลับมาที่ Playground กด **Exchange authorization code for tokens**
+6. คัดลอกค่า **Refresh token** (ขึ้นต้นด้วย `1//`)
+
+> refresh token แสดงเฉพาะครั้งแรกที่อนุญาต ถ้าเผลอปิดหน้าไปก่อนคัดลอก ให้ไปที่
+> [myaccount.google.com/permissions](https://myaccount.google.com/permissions) ถอนสิทธิ์แอปนั้นแล้วทำข้อ 3–6 ใหม่
+
+### 15.5 ใส่ค่าใน `/opt/minghe/.env`
+
+🖥️ บน Droplet:
+
+```bash
+nano /opt/minghe/.env
+```
+
+```ini
+GMAIL_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+GMAIL_CLIENT_SECRET=GOCSPX-xxxxxxxx
+GMAIL_REFRESH_TOKEN=1//0gxxxxxxxx
+GMAIL_ACCESS_TOKEN=
+GMAIL_SENDER_EMAIL=<ที่อยู่ของบัญชีที่อนุญาตไว้>
+MINGHE_OTP_ECHO=false
+```
+
+```bash
+cd /opt/minghe && docker compose up -d && docker compose logs api --tail 30 | grep -i gmail
+```
+
+**ไม่มีบรรทัด `gmail credentials not configured` = ต่อติดแล้ว**
+
+### 15.6 ทดสอบว่าส่งถึงจริง
+
+สมัครสมาชิกจริงหนึ่งบัญชีที่ `https://minghe.work/register` แล้วเปิดเมลที่ได้ → **Show original** ตรวจสามบรรทัด:
+
+| หัวข้อ | ต้องได้ |
+|---|---|
+| `SPF` | `PASS` — ถ้า `FAIL` แปลว่าใช้ทาง ข โดยยังไม่แก้ SPF (§0 ข้อ 4) |
+| `DKIM` | `PASS` |
+| `From` | ตรงกับ `GMAIL_SENDER_EMAIL` — ถ้าถูกเขียนทับเป็นที่อยู่อื่น แปลว่าบัญชีไม่ได้เป็นเจ้าของที่อยู่นั้น |
+
+### 15.7 ข้อจำกัดที่ต้องรู้ก่อนเปิดขาย
+
+- บัญชี `@gmail.com` ส่งได้ **~500 ฉบับ/วัน** · Google Workspace **~2,000 ฉบับ/วัน** — เกินแล้วถูกระงับชั่วคราว 24 ชม.
+- ถ้ายอดสมัครโตเกินนั้น ให้ย้ายไปผู้ให้บริการส่งอีเมลโดยเฉพาะ (Resend / SendGrid / Amazon SES) ซึ่งต้องแก้ `email.service.go`
+- ถอนสิทธิ์แอปใน [myaccount.google.com/permissions](https://myaccount.google.com/permissions) เมื่อไร refresh token ตายทันที ระบบจะส่ง OTP ไม่ได้
