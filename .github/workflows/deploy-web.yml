@@ -1,16 +1,21 @@
-# Deploy หน้าบ้าน → Cloudflare Pages (minghe.work)
+# Deploy หน้าบ้าน → Caddy บน DigitalOcean Droplet (เครื่องเดียวกับ API)
+#
+# ทำไมไม่ใช้ Cloudflare Pages: รอบ UAT ต้องพร้อมในวันเดียว การพึ่ง Pages เพิ่ม token
+# และขั้นตอนล็อกอินอีกชุดโดยไม่จำเป็น — เครื่องที่รัน API อยู่แล้วเสิร์ฟ static ได้เลย
+# ถ้าจะกลับไปใช้ Pages ทีหลัง เพิ่ม job ใหม่ได้โดยไม่ต้องแก้ Caddyfile
 #
 # กติกา production:
 #   · trigger เฉพาะ push เข้า main (หรือกดรันเองจาก main) — ไม่มีทางอื่น
-#   · ใช้ environment `production` ซึ่งตั้ง Deployment branches = main only (+ required reviewer ถ้าต้องการ)
+#   · ใช้ environment `production` ซึ่งตั้ง Deployment branches = main only
 #   · main เองถูกป้องกันด้วย ruleset ให้ต้องผ่าน PR + CI ก่อน (ดู docs/deploy.md)
 #
-# Secrets/Vars ที่ต้องตั้งใน environment production:
-#   CLOUDFLARE_API_TOKEN  (secret)  token ที่มีสิทธิ์ Cloudflare Pages:Edit
-#   CLOUDFLARE_ACCOUNT_ID (secret)
-#   API_BASE_URL          (var)     ค่าเริ่มต้น https://api.minghe.work
-#   CF_PAGES_PROJECT      (var)     ค่าเริ่มต้น minghe-work
-name: Deploy web (Cloudflare Pages)
+# Secrets/Vars ที่ต้องตั้งใน environment production (ชุดเดียวกับ deploy-api.yml):
+#   DEPLOY_HOST     (secret)  Reserved IP ของ Droplet
+#   DEPLOY_USER     (secret)  root
+#   DEPLOY_SSH_KEY  (secret)  private key ที่คู่กับ public key ตอนสร้าง Droplet
+#   API_BASE_URL    (var)     ค่าเริ่มต้น https://api.minghe.work
+#   WEB_URL         (var)     ค่าเริ่มต้น https://uat.minghe.work — ใช้แสดงลิงก์ในหน้า Actions
+name: Deploy web (Droplet)
 
 on:
   push:
@@ -29,17 +34,15 @@ concurrency:
 
 permissions:
   contents: read
-  deployments: write
 
 jobs:
   deploy:
     name: build + deploy
-    # กันคนกด workflow_dispatch จาก branch อื่น
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://minghe.work
+      url: ${{ vars.WEB_URL || 'https://uat.minghe.work' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -57,14 +60,54 @@ jobs:
           NEXT_TELEMETRY_DISABLED: '1'
         run: pnpm --filter @minghe/app build
 
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+      # ส่งเป็นก้อนเดียวเร็วกว่า scp ทีละไฟล์มาก (static export มีหลายพันไฟล์เล็ก)
+      - name: Pack static export
+        run: |
+          test -f apps/app/out/index.html || { echo "ไม่พบผลลัพธ์ build ที่ apps/app/out"; exit 1; }
+          echo "จำนวนหน้า HTML: $(find apps/app/out -name '*.html' | wc -l)"
+          tar -czf web.tar.gz -C apps/app/out .
+
+      - name: Upload to Droplet
+        uses: appleboy/scp-action@v0.1.7
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: >-
-            pages deploy apps/app/out
-            --project-name=${{ vars.CF_PAGES_PROJECT || 'minghe-work' }}
-            --branch=main
-            --commit-hash=${{ github.sha }}
-            --commit-message="${{ github.event.head_commit.message || 'manual deploy' }}"
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: 'web.tar.gz'
+          target: /tmp
+
+      - name: Publish
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            command -v rsync >/dev/null 2>&1 || { apt-get update -y && apt-get install -y rsync; }
+
+            # แตกลง staging ก่อน แล้วค่อย sync เข้าโฟลเดอร์จริง
+            # ห้าม mv ทับ /opt/minghe/web เพราะ caddy bind mount ไว้ตาม inode
+            # ถ้าสลับโฟลเดอร์ คอนเทนเนอร์จะยังเห็นของเก่าจนกว่าจะ restart
+            rm -rf /tmp/web.staging && mkdir -p /tmp/web.staging /opt/minghe/web
+            tar -xzf /tmp/web.tar.gz -C /tmp/web.staging
+            rsync -a --delete /tmp/web.staging/ /opt/minghe/web/
+            rm -rf /tmp/web.staging /tmp/web.tar.gz
+
+            echo "เผยแพร่แล้ว $(find /opt/minghe/web -name '*.html' | wc -l) หน้า"
+            # caddy อ่านไฟล์จากดิสก์ทุก request ไม่ต้อง restart — reload เฉพาะกรณี Caddyfile เปลี่ยน
+            cd /opt/minghe && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || true
+
+      - name: Verify
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            test -f /opt/minghe/web/index.html
+            domain=$(grep -E '^WEB_DOMAIN=' /opt/minghe/.env | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d ' ')
+            domain=${domain:-uat.minghe.work}
+            echo "ตรวจผ่าน Caddy ด้วย Host: $domain"
+            curl -fsS -o /dev/null -w 'หน้าแรก HTTP %{http_code}\n' http://127.0.0.1/ -H "Host: $domain"

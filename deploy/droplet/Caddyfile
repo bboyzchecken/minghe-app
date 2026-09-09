@@ -1,5 +1,14 @@
-# Caddy ออก TLS ให้อัตโนมัติ (Let's Encrypt) — DNS ของ API_DOMAIN ต้องชี้มาที่ IP เครื่องนี้
+# Caddy ออก TLS ให้อัตโนมัติ (Let's Encrypt) — DNS ของทั้งสองโดเมนต้องชี้มาที่ IP เครื่องนี้
 # และ DigitalOcean Cloud Firewall ต้องเปิด 80 + 443 (ผูก firewall กับ Droplet ตัวนี้ด้วย)
+#
+# เครื่องเดียวเสิร์ฟสองอย่าง:
+#   API_DOMAIN  → reverse proxy ไป Go API
+#   WEB_DOMAIN  → static export ของ apps/app ที่ /opt/minghe/web
+#
+# ทำไมเสิร์ฟหน้าบ้านจากเครื่องเดียวกัน: รอบ UAT ต้องการให้ทุกอย่างพร้อมในวันเดียว
+# การพึ่ง Cloudflare Pages เพิ่มขั้นตอนล็อกอินและ token อีกชุดโดยไม่จำเป็น
+# ถ้าจะกลับไปใช้ Pages ทีหลัง แค่เลิกชี้ WEB_DOMAIN มาที่เครื่องนี้ ไม่ต้องแก้อะไรในบล็อกนี้
+
 {$API_DOMAIN:api.minghe.work} {
 	encode gzip
 	header {
@@ -10,4 +19,36 @@
 	reverse_proxy api:5000 {
 		header_up X-Real-IP {remote_host}
 	}
+}
+
+{$WEB_DOMAIN:uat.minghe.work} {
+	encode gzip
+	root * /srv/web
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# ไฟล์ที่มีลายนิ้วมือใน build (_next/static) ไม่มีวันเปลี่ยนเนื้อในชื่อเดิม แคชยาวได้
+	@immutable path /_next/static/*
+	header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+	# หน้า HTML ต้องไม่ถูกแคช ไม่งั้น deploy ใหม่แล้วผู้ทดสอบยังเห็นของเก่า
+	@html path *.html /
+	header @html Cache-Control "no-cache"
+
+	# next.config.mjs ตั้ง trailingSlash: true → ทุกหน้าเป็น <path>/index.html
+	# file_server เดาไฟล์ index ให้เองอยู่แล้ว แต่ต้องมีทางลงให้ URL ที่ไม่มีจริง
+	handle_errors {
+		@notfound expression {err.status_code} == 404
+		handle @notfound {
+			rewrite * /404.html
+			file_server
+		}
+	}
+
+	file_server
 }

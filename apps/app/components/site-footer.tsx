@@ -7,6 +7,8 @@ import { ELEMENT_ORDER } from '@/lib/brand'
 import { ElementIcon } from './element-icon'
 import { Logo } from './logo'
 import { SELLER } from '@/lib/legal'
+import { openCookieSettings } from '@/lib/analytics'
+import { GA_ID } from '@/lib/env'
 
 export function SiteFooter() {
   const pathname = usePathname()
@@ -53,6 +55,14 @@ export function SiteFooter() {
                 <li><Link href="/legal/terms" className="hover:text-gold">เงื่อนไขการใช้งาน</Link></li>
                 <li><Link href="/legal/refund" className="hover:text-gold">การคืนเงิน / ลบบัญชี</Link></li>
                 <li><Link href="/legal/cookies" className="hover:text-gold">นโยบายคุกกี้</Link></li>
+                {/* ถอนความยินยอมต้องง่ายพอ ๆ กับตอนให้ — ซ่อนเมื่อไม่มีคุกกี้สถิติให้ตั้งค่า */}
+                {GA_ID && (
+                  <li>
+                    <button type="button" onClick={openCookieSettings} className="hover:text-gold">
+                      ตั้งค่าคุกกี้
+                    </button>
+                  </li>
+                )}
               </ul>
             </div>
             <div>

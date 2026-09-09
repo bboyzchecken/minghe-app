@@ -24,3 +24,12 @@ export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://loc
  * ค่านี้เหลือไว้ให้หน้าจอมีคำตอบระหว่างที่ยังโหลด `/mode` ไม่เสร็จเท่านั้น
  */
 export const GOOGLE_LOGIN_ENABLED = process.env.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === 'true'
+
+/**
+ * รหัสพร็อพเพอร์ตี้ Google Analytics 4 (เช่น `G-XXXXXXXXXX`)
+ *
+ * เว้นว่าง = ไม่มีสถิติและไม่มีแบนเนอร์ขอความยินยอม ซึ่งเป็นค่าที่ต้องการสำหรับ
+ * dev, UAT และ preview build — ตั้งเฉพาะสภาพแวดล้อม production เท่านั้น
+ * ไม่งั้นทราฟฟิกจากการทดสอบจะปนเข้ารายงาน
+ */
+export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? ''

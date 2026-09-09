@@ -23,10 +23,11 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-echo "→ [1/5] ติดตั้ง Docker Engine + compose plugin"
+echo "→ [1/5] ติดตั้ง Docker Engine + compose plugin (+ rsync ไว้ใช้ตอน deploy หน้าบ้าน)"
+command -v rsync >/dev/null 2>&1 || { apt-get update -y && apt-get install -y rsync; }
 if ! command -v docker >/dev/null 2>&1; then
   apt-get update -y
-  apt-get install -y ca-certificates curl gnupg
+  apt-get install -y ca-certificates curl gnupg rsync
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
   chmod a+r /etc/apt/keyrings/docker.gpg
@@ -44,7 +45,8 @@ if ! swapon --show | grep -q /swapfile; then
 fi
 
 echo "→ [3/5] วางไฟล์ที่ $TARGET"
-mkdir -p "$TARGET"
+# web/ ต้องมีก่อน caddy สตาร์ต ไม่งั้น docker สร้างเป็นโฟลเดอร์ของ root แล้ว rsync เขียนไม่ได้
+mkdir -p "$TARGET" "$TARGET/web"
 cp "$HERE/docker-compose.yml" "$HERE/Caddyfile" "$TARGET/"
 if [ ! -f "$TARGET/.env" ]; then
   cp "$HERE/.env.example" "$TARGET/.env"
@@ -68,7 +70,9 @@ cat <<EOF
 
 เสร็จแล้ว ✓
   · ตรวจ API:  curl -s http://127.0.0.1:5000/healthz
-  · เมื่อ DNS ${API_DOMAIN:-api.minghe.work} ชี้มาที่เครื่องนี้และ DO Firewall เปิด 80/443 แล้ว Caddy จะออก TLS ให้เอง
+  · เมื่อ DNS ${API_DOMAIN:-api.minghe.work} และ ${WEB_DOMAIN:-uat.minghe.work} ชี้มาที่เครื่องนี้
+    และ DO Firewall เปิด 80/443 แล้ว Caddy จะออก TLS ให้เองทั้งสองโดเมน
+  · หน้าบ้านยังว่างจนกว่าจะรัน workflow "Deploy web" ครั้งแรก (อัปโหลด static มาที่ $TARGET/web)
   · backup ฐานข้อมูลรายวัน: เพิ่ม cron
       0 3 * * * cd /opt/minghe && docker compose exec -T db sh -c 'mysqldump -uroot -p"\$MYSQL_ROOT_PASSWORD" minghe' | gzip > /opt/minghe/backup-\$(date +\\%F).sql.gz
 EOF
