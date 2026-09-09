@@ -32,46 +32,98 @@ const smtpTimeout = 20 * time.Second
 const resendEndpoint = "https://api.resend.com/emails"
 
 type EmailService struct {
-	config core.GoogleAPIConfig
-	resend core.ResendConfig
-	smtp   core.SMTPConfig
-	appURL string
-	svc    *gmail.Service
-	http   *http.Client
+	transport string
+	config    core.GoogleAPIConfig
+	resend    core.ResendConfig
+	smtp      core.SMTPConfig
+	appURL    string
+	svc       *gmail.Service
+	http      *http.Client
 }
 
 // New สร้าง service ส่งอีเมล โดยเลือกช่องทางตามค่าที่ตั้งไว้
 //
-//  1. Resend      — ช่องทางหลัก ใช้เมื่อมี RESEND_API_KEY (ส่งผ่าน HTTPS พอร์ต 443)
-//  2. SMTP        — ใช้เมื่อมี SMTP_HOST และ SMTP_USERNAME
-//  3. Gmail API   — ใช้เมื่อมี GMAIL_CLIENT_ID และ GMAIL_REFRESH_TOKEN
+// ตั้ง MAIL_TRANSPORT = resend | smtp | gmail | log เพื่อบังคับช่องทางตรง ๆ
+// เว้นว่างไว้ = เลือกเองตามลำดับนี้
+//
+//  1. Resend      — เมื่อมี RESEND_API_KEY (ส่งผ่าน HTTPS พอร์ต 443)
+//  2. SMTP        — เมื่อมี SMTP_HOST และ SMTP_USERNAME
+//  3. Gmail API   — เมื่อมี GMAIL_CLIENT_ID และ GMAIL_REFRESH_TOKEN (HTTPS เช่นกัน)
 //  4. log เท่านั้น — ไม่มีสักอย่าง (โหมด dev รันได้โดยไม่ต้องมี credential)
 //
-// ลำดับนี้ทำให้สลับช่องทางได้ด้วยการแก้ .env อย่างเดียว ไม่ต้อง build ใหม่
+// สลับช่องทางได้ด้วยการแก้ .env อย่างเดียว ไม่ต้อง build ใหม่
 func New(cfg core.Config) *EmailService {
 	s := &EmailService{
-		config: cfg.GoogleAPI,
-		resend: cfg.Resend,
-		smtp:   cfg.SMTP,
-		appURL: cfg.AppBaseURL,
-		http:   &http.Client{Timeout: smtpTimeout},
+		transport: cfg.MailTransport,
+		config:    cfg.GoogleAPI,
+		resend:    cfg.Resend,
+		smtp:      cfg.SMTP,
+		appURL:    cfg.AppBaseURL,
+		http:      &http.Client{Timeout: smtpTimeout},
 	}
 
-	if s.resendConfigured() {
+	// Gmail API ต้องสร้าง client ไว้ล่วงหน้าเสมอ เพราะ resolve() ใช้ svc เป็นตัวชี้ว่าพร้อมหรือยัง
+	if cfg.GoogleAPI.ClientID != "" && cfg.GoogleAPI.RefreshToken != "" {
+		s.initGmail(cfg)
+	}
+
+	switch s.resolve() {
+	case transportResend:
 		logger.Info("email: ส่งผ่าน Resend ในนาม ", s.senderHeader())
-		return s
-	}
-
-	if s.smtpConfigured() {
+	case transportSMTP:
 		logger.Info("email: ส่งผ่าน SMTP ", cfg.SMTP.Host, ":", cfg.SMTP.Port, " ในนาม ", s.fromAddress())
-		return s
+	case transportGmail:
+		logger.Info("email: ส่งผ่าน Gmail API ในนาม ", firstNonEmptySender(cfg.GoogleAPI.SenderEmail, "บัญชีที่อนุญาตไว้"))
+	default:
+		if s.transport != "" && s.transport != transportAuto {
+			logger.Error("email: MAIL_TRANSPORT=", s.transport, " แต่ยังตั้งค่าช่องทางนั้นไม่ครบ — อีเมลจะไม่ถูกส่ง")
+		} else {
+			logger.Warn("email credentials not configured — emails will be logged instead of sent")
+		}
+	}
+	return s
+}
+
+const (
+	transportAuto   = "auto"
+	transportResend = "resend"
+	transportSMTP   = "smtp"
+	transportGmail  = "gmail"
+	transportLog    = "log"
+)
+
+// resolve บอกว่าจะส่งผ่านช่องทางไหนจริง ๆ
+//
+// ถ้า MAIL_TRANSPORT ระบุไว้ชัดเจนก็เคารพค่านั้นเสมอ แม้จะตั้งค่าไม่ครบ —
+// ตั้งใจให้ล้มเหลวแบบเห็นชัดพร้อมบอกสาเหตุ ดีกว่าเงียบ ๆ ไปใช้ช่องทางอื่น
+// ที่ไม่ได้ตั้งใจแล้วอีเมลออกจากที่อยู่ผิด
+func (s *EmailService) resolve() string {
+	switch s.transport {
+	case transportResend, transportSMTP, transportGmail, transportLog:
+		return s.transport
 	}
 
-	if cfg.GoogleAPI.ClientID == "" || cfg.GoogleAPI.RefreshToken == "" {
-		logger.Warn("email credentials not configured — emails will be logged instead of sent")
-		return s
+	switch {
+	case s.resendConfigured():
+		return transportResend
+	case s.smtpConfigured():
+		return transportSMTP
+	case s.svc != nil:
+		return transportGmail
+	default:
+		return transportLog
 	}
+}
 
+func firstNonEmptySender(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
+}
+
+// initGmail เตรียม client ของ Gmail API ไว้ใช้เมื่อ resolve() เลือกช่องทางนี้
+func (s *EmailService) initGmail(cfg core.Config) {
 	oauthConfig := &oauth2.Config{
 		ClientID:     cfg.GoogleAPI.ClientID,
 		ClientSecret: cfg.GoogleAPI.ClientSecret,
@@ -88,20 +140,28 @@ func New(cfg core.Config) *EmailService {
 	svc, err := gmail.NewService(context.Background(), option.WithHTTPClient(client))
 	if err != nil {
 		logger.Error("cannot init gmail service: ", err)
-		return s
+		return
 	}
 	s.svc = svc
-	return s
 }
 
 // Send ส่งอีเมล HTML หนึ่งฉบับผ่านช่องทางที่ตั้งไว้
 func (s *EmailService) Send(to, subject, htmlBody string) error {
-	switch {
-	case s.resendConfigured():
+	switch s.resolve() {
+	case transportResend:
+		if !s.resendConfigured() {
+			return fmt.Errorf("resend: ยังไม่ได้ตั้ง RESEND_API_KEY หรือที่อยู่ผู้ส่ง")
+		}
 		return s.sendResend(to, subject, htmlBody)
-	case s.smtpConfigured():
+	case transportSMTP:
+		if !s.smtpConfigured() {
+			return fmt.Errorf("smtp: ยังไม่ได้ตั้ง SMTP_HOST หรือ SMTP_USERNAME")
+		}
 		return s.sendSMTP(to, subject, htmlBody)
-	case s.svc != nil:
+	case transportGmail:
+		if s.svc == nil {
+			return fmt.Errorf("gmail: ยังไม่ได้ตั้ง GMAIL_CLIENT_ID หรือ GMAIL_REFRESH_TOKEN")
+		}
 		return s.sendGmailAPI(to, subject, htmlBody)
 	default:
 		logger.WithFields(map[string]any{"to": to, "subject": subject}).

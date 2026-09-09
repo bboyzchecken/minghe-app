@@ -29,8 +29,15 @@ type Config struct {
 	// CORSAllowedOrigins — origin ของหน้าเว็บที่อนุญาตเพิ่มจาก AppBaseURL และ localhost
 	CORSAllowedOrigins []string
 
-	MySQL     MySQLConfig
-	Redis     RedisConfig
+	MySQL MySQLConfig
+	Redis RedisConfig
+	// MailTransport — บังคับช่องทางส่งอีเมล: resend | smtp | gmail | log
+	//
+	// เว้นว่าง (หรือ auto) = เลือกเองตามลำดับ Resend → SMTP → Gmail API → log
+	// มีไว้เพราะ .env ของ production เก็บค่าของหลายช่องทางไว้พร้อมกัน การเลือก
+	// อัตโนมัติจึงเดาผิดได้ง่ายเวลาสลับ เช่นลืมล้าง SMTP_HOST แล้ว Gmail ไม่ถูกใช้
+	MailTransport string
+
 	Resend    ResendConfig
 	SMTP      SMTPConfig
 	GoogleAPI GoogleAPIConfig

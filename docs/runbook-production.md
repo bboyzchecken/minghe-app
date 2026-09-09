@@ -786,92 +786,228 @@ Invoke-RestMethod https://api.minghe.work/healthz
 
 ---
 
-## 15. ตั้งค่าส่งอีเมล OTP — Resend
+## 15. เลือกช่องทางส่งอีเมล
 
-### 15.0 ทำไมไม่ใช่ SMTP และไม่ใช่ Gmail API
+ตั้ง `MAIL_TRANSPORT` ใน `.env` เพื่อบังคับช่องทางให้ชัด — เว้นว่างไว้ระบบจะเดาเองตามลำดับ
+`Resend → SMTP → Gmail → log` ซึ่งเดาผิดได้ง่ายเมื่อ `.env` เก็บค่าของหลายช่องทางไว้พร้อมกัน
 
-ลองมาแล้วทั้งสองทาง ตันทั้งคู่ด้วยเหตุผลคนละแบบ:
+| `MAIL_TRANSPORT` | ใช้พอร์ต | ใช้บน Droplet นี้ได้ไหม |
+|---|---|---|
+| `gmail` | HTTPS 443 | ✅ ได้ — **ทางที่เลือกใช้** |
+| `resend` | HTTPS 443 | ✅ ได้ (เขียนโค้ดรองรับไว้แล้ว ใช้เป็นทางสำรองได้ทันที) |
+| `smtp` | 25 / 465 / 587 / 3535 | ❌ **ไม่ได้** DigitalOcean บล็อกขาออกทุกพอร์ต ทดสอบแล้วตันหมด |
+| `log` | — | เขียนอีเมลลง log เฉย ๆ ใช้ตอน dev |
 
-| ทาง | ผลจริง |
-|---|---|
-| **Gmail API** | `gmail.send` เป็น *sensitive scope* — publish เป็น In production ทั้งที่ยังไม่ผ่านการตรวจ โดนบล็อกด้วย *"Access blocked: … has not completed the Google verification process"* · อยู่ใน Testing ต่อก็ทำให้ refresh token ตายทุก 7 วัน |
-| **SMTP (GoDaddy)** | **DigitalOcean บล็อกพอร์ต SMTP ขาออกทุกพอร์ต** — ทดสอบจาก Droplet แล้วตันหมดทั้ง `25` `80` `465` `587` `3535` · ขอปลดล็อกต้องเปิด ticket รอหลายวันโดยไม่รับประกันผล |
-| **Resend** | ส่งผ่าน **HTTPS พอร์ต 443** ซึ่งเป็นพอร์ตเดียวกับที่ `docker pull` และ Let's Encrypt ใช้อยู่แล้ว จึงไม่มีทางถูกนโยบายกันสแปมบล็อก |
+---
 
-โค้ดเลือกช่องทางตามลำดับ **Resend → SMTP → Gmail API → log เท่านั้น** สลับได้ด้วยการแก้ `.env` อย่างเดียว ไม่ต้อง build ใหม่
+## 16. เส้นทาง Google — ติดตั้ง production และขอ verification
 
-### 15.1 สมัครและยืนยันโดเมน
+Gmail API วิ่งผ่าน HTTPS 443 จึงไม่ติดการบล็อก SMTP ของ DigitalOcean แต่ scope `gmail.send`
+เป็น **sensitive scope** ซึ่งมีเงื่อนไขเรื่องการตรวจสอบแอปเข้ามาเกี่ยวข้อง หัวข้อนี้แยกเป็นสองส่วน:
+**16.1–16.4 ทำให้ส่งได้จริงวันนี้** · **16.5–16.9 ขอ verification เพื่อให้อยู่ได้ถาวร**
 
-1. สมัครที่ [resend.com](https://resend.com) (free 3,000 ฉบับ/เดือน · 100 ฉบับ/วัน)
-2. **Domains → Add Domain** → ใส่ `minghe.work` → เลือก region **ap-northeast-1 (Tokyo)** ใกล้ผู้ใช้ไทยที่สุด
-3. Resend จะแสดงเรกคอร์ด DNS 3 รายการให้เอาไปใส่
+### 16.0 มีทางลัดที่ข้าม verification ได้ทั้งหมด
 
-### 15.2 ใส่เรกคอร์ดใน Cloudflare
+ถ้ายอมจ่ายค่า **Google Workspace** ให้ `minghe.work` (~$7/ผู้ใช้/เดือน) จะตั้ง OAuth app เป็น
+**Internal** ได้ ซึ่ง **ไม่ต้องผ่าน verification เลย** และ **refresh token ไม่มีวันหมดอายุ**
+แถมได้กล่องจดหมาย `info@minghe.work` ของจริงไปในตัว (ต้องย้าย MX จาก GoDaddy มา Google)
 
-**Cloudflare → DNS → Records → Add record** ตามที่หน้า Resend บอก หน้าตาประมาณนี้:
+| | External + verification | Workspace + Internal |
+|---|---|---|
+| ค่าใช้จ่าย | ฟรี | ~$7/เดือน |
+| เวลาที่ต้องรอ | 1–4 สัปดาห์ ผ่านการตรวจหลายรอบ | ใช้ได้ทันที |
+| token หมดอายุ | ไม่หมด (หลังผ่านการตรวจแล้ว) | ไม่หมด |
+| ความเสี่ยง | Google อาจตีกลับหรือไม่อนุมัติ | ไม่มี |
 
-| Type | Name | Content | Proxy |
-|---|---|---|---|
-| MX | `send` | `feedback-smtp.ap-northeast-1.amazonses.com` (priority 10) | — |
-| TXT | `send` | `v=spf1 include:amazonses.com ~all` | — |
-| TXT | `resend._domainkey` | คีย์ DKIM ยาว ๆ ที่ Resend ให้มา | — |
+> ถ้ายังไม่มี Workspace และไม่อยากจ่าย ให้ทำตาม 16.1 เป็นต้นไป
 
-> ✅ **MX ของอีเมลเดิมไม่กระทบ** — เรกคอร์ดพวกนี้อยู่บนซับโดเมน `send.minghe.work`
-> กล่องจดหมาย `info@minghe.work` ที่ GoDaddy ยังรับเมลเข้าได้ตามปกติ
->
-> ✅ **ไม่ต้องแก้ SPF ของโดเมนหลัก** — SPF ปัจจุบัน `v=spf1 include:secureserver.net -all` อยู่เหมือนเดิม
-> เพราะ Return-Path ของ Resend อยู่บน `send.minghe.work` และ DMARC ผ่านทาง DKIM ที่เซ็นด้วย `d=minghe.work`
+### 16.1 เตรียม OAuth client
 
-กลับไปกด **Verify** ที่หน้า Resend — DNS อยู่ Cloudflare อยู่แล้วจึงมักผ่านใน 1–5 นาที
+1. [console.cloud.google.com](https://console.cloud.google.com) → เลือก/สร้างโปรเจกต์ `minghe-mail`
+2. **APIs & Services → Library** → `Gmail API` → **Enable**
+3. **OAuth consent screen** → User type **External** → กรอกชื่อแอป อีเมลสนับสนุน อีเมลผู้พัฒนา
+4. **Data access → Add scopes** → `https://www.googleapis.com/auth/gmail.send`
+5. **Audience → Test users → Add users** → ใส่บัญชี Google ที่จะใช้ส่ง
 
-### 15.3 สร้าง API key แล้วใส่ใน `.env`
+> 🔴 **ระหว่างนี้ให้คงสถานะ *Testing* ไว้ก่อน อย่าเพิ่งกด Publish**
+> ถ้า publish ทั้งที่ยังไม่ผ่านการตรวจ จะโดน *"Access blocked: … has not completed the Google
+> verification process"* แล้วจะขออนุญาตไม่ได้เลยแม้แต่บัญชีตัวเอง — ซึ่งคือสิ่งที่เจอมาแล้ว
+> สถานะ Testing ยังขออนุญาตได้ตามปกติ แค่มีข้อจำกัดเรื่องอายุ token ตาม 16.4
 
-**Resend → API Keys → Create API Key** → สิทธิ์ **Sending access** → คัดลอกค่า `re_...` (แสดงครั้งเดียว)
+6. **Credentials → Create credentials → OAuth client ID** → **Web application**
+   → Authorized redirect URIs: `https://developers.google.com/oauthplayground`
+
+### 16.2 แลก refresh token
+
+1. เปิด [developers.google.com/oauthplayground](https://developers.google.com/oauthplayground)
+2. **เฟือง** มุมขวาบน → ติ๊ก **Use your own OAuth credentials** → วาง Client ID / Client secret
+3. ช่องซ้าย **Input your own scopes** → `https://www.googleapis.com/auth/gmail.send` → **Authorize APIs**
+4. ล็อกอินด้วยบัญชีที่เพิ่มเป็น Test user → ผ่านหน้า *Google hasn't verified this app* ด้วย
+   **Advanced → Go to … (unsafe)** → **Allow**
+5. **Exchange authorization code for tokens** → คัดลอก **Refresh token** (`1//…`)
+
+> refresh token แสดงเฉพาะครั้งแรกที่อนุญาต ถ้าพลาดให้ไป
+> [myaccount.google.com/permissions](https://myaccount.google.com/permissions) ถอนสิทธิ์แอปแล้วทำข้อ 3–5 ใหม่
+
+### 16.3 ตั้งค่าบน production
 
 🖥️ บน Droplet: `nano /opt/minghe/.env`
 
 ```ini
-RESEND_API_KEY=re_xxxxxxxxxxxxxxxx
-MAIL_SENDER_EMAIL=info@minghe.work
-MAIL_SENDER_NAME=命合 Mìnghé
+MAIL_TRANSPORT=gmail
 
-# ต้องเป็น false ไม่งั้นระบบโชว์รหัสบนหน้าจอแทนการส่งอีเมล
+GMAIL_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+GMAIL_CLIENT_SECRET=GOCSPX-xxxxxxxx
+GMAIL_REFRESH_TOKEN=1//0gxxxxxxxx
+GMAIL_ACCESS_TOKEN=
+GMAIL_SENDER_EMAIL=<ที่อยู่ของบัญชีที่อนุญาตไว้>
+
 MINGHE_OTP_ECHO=false
 ```
 
-`MAIL_SENDER_EMAIL` เว้นว่างได้ถ้าตั้ง `SMTP_SENDER_EMAIL` ไว้แล้ว — โค้ดใช้ค่านั้นแทนให้เอง
-ค่า `SMTP_*` ที่ค้างอยู่ไม่ต้องลบ Resend มาก่อนอยู่แล้วตามลำดับใน §15.0
+- `GMAIL_ACCESS_TOKEN` **เว้นว่างได้** — ไลบรารี oauth2 ขอใหม่จาก refresh token ให้เอง
+- `MAIL_TRANSPORT=gmail` ทำให้ค่า `SMTP_*` หรือ `RESEND_API_KEY` ที่ค้างอยู่ไม่รบกวน ไม่ต้องลบทิ้ง
+- `GMAIL_SENDER_EMAIL` ต้องเป็นที่อยู่ที่บัญชีนั้นเป็นเจ้าของ ไม่งั้น Gmail เขียนทับ `From:` กลับเงียบ ๆ
 
 ```bash
-cd /opt/minghe && docker compose up -d --force-recreate api && docker compose logs api --tail 20 | grep -i email
+cd /opt/minghe && docker compose pull api && docker compose up -d --force-recreate api
+docker compose logs api --tail 20 | grep -i email
 ```
 
-ต้องเห็น `email: ส่งผ่าน Resend ในนาม 命合 Mìnghé <info@minghe.work>`
+ต้องเห็น `email: ส่งผ่าน Gmail API ในนาม …` แล้วทดสอบสมัครสมาชิกจริงหนึ่งบัญชี
 
-### 15.4 ทดสอบว่าส่งถึงจริง
+ถ้าล้ม ดูข้อความเต็มที่ `docker compose logs api --tail 50 | grep "cannot send otp"`:
 
-เปิด log ค้างไว้แล้วสมัครสมาชิกจริงหนึ่งบัญชีที่ `https://minghe.work/register`:
-
-```bash
-cd /opt/minghe && docker compose logs -f api | grep -iE "otp|resend|error"
-```
-
-ไม่มีบรรทัด `cannot send otp email` = ส่งออกแล้ว · ถ้ามี ข้อความหลังคำว่า `resend:` คือคำตอบจาก API ตรง ๆ:
-
-| ตอบกลับ | สาเหตุ |
+| ข้อความ | สาเหตุ |
 |---|---|
-| `403 … domain is not verified` | ยังไม่ผ่าน Verify ในข้อ 15.2 |
-| `401 … API key is invalid` | คีย์ผิด หรือคัดลอกไม่ครบ |
-| `422 … Invalid from field` | `MAIL_SENDER_EMAIL` ไม่ได้อยู่ในโดเมนที่ยืนยัน |
+| `oauth2: … invalid_grant` | refresh token หมดอายุหรือถูกถอนสิทธิ์ → ทำ 16.2 ใหม่ |
+| `Error 403: Request had insufficient authentication scopes` | ตอน authorize ไม่ได้ติ๊ก `gmail.send` |
+| `Error 400: Precondition check failed` | บัญชีที่อนุญาตไม่มีสิทธิ์ส่งในนาม `GMAIL_SENDER_EMAIL` |
 
-เปิดเมลที่ได้ → **Show original** → ต้องได้ `DKIM: PASS` และ `DMARC: PASS`
-(`SPF` อาจขึ้นเป็นโดเมน `send.minghe.work` ซึ่งถูกต้องแล้ว ไม่ใช่ความผิดพลาด)
+### 16.4 🔴 ข้อจำกัดที่ต้องรับมือระหว่างยังไม่ผ่านการตรวจ
 
-ดูสถานะรายฉบับได้ที่ **Resend → Emails** บอกได้ว่าส่งออก ตีกลับ หรือถูกปฏิเสธ ซึ่ง SMTP ไม่มีให้
+แอปที่สถานะ **Testing** และใช้ sensitive scope จะมี **refresh token อายุ 7 วัน**
+ครบกำหนดเมื่อไร OTP หยุดส่งทันทีโดยไม่มีสัญญาณเตือนล่วงหน้า — log จะขึ้น `invalid_grant`
 
-### 15.5 ข้อจำกัดและการโตต่อ
+รับมือได้สองแบบ เลือกอย่างใดอย่างหนึ่ง:
 
-- free tier **100 ฉบับ/วัน · 3,000 ฉบับ/เดือน** — เกินแล้วต้องขยับเป็นแพ็กจ่ายเงิน (เริ่ม $20/เดือน ที่ 50,000 ฉบับ)
-- ถ้าย้ายผู้ให้บริการอีกในอนาคต เจ้าที่มี SMTP relay (Brevo, Amazon SES, Postmark) ใช้ `SMTP_*` ที่มีอยู่แล้วได้เลย
-  **แต่ต้องเป็นเครื่องที่ไม่ถูกบล็อกพอร์ต SMTP** ซึ่ง Droplet ตัวนี้ไม่ใช่ — บนเครื่องนี้ต้องเป็นผู้ให้บริการที่มี HTTP API เท่านั้น
-- ถอนหรือลบ API key ใน Resend เมื่อไร ระบบส่ง OTP ไม่ได้ทันที
+**แบบ ก — ต่ออายุเองทุกสัปดาห์** ตั้งเตือนในปฏิทินทุก 6 วัน แล้วทำ 16.2 ซ้ำ (ใช้เวลา ~2 นาที)
+เอาค่าใหม่ใส่ `.env` แล้ว `docker compose up -d --force-recreate api`
+
+**แบบ ข — ใช้ Resend คั่นระหว่างรอ** โค้ดรองรับอยู่แล้ว เปลี่ยนบรรทัดเดียวเป็น `MAIL_TRANSPORT=resend`
+พอ Google อนุมัติแล้วค่อยสลับกลับเป็น `gmail` — ไม่ต้องแก้โค้ดทั้งสองรอบ (วิธีตั้ง Resend อยู่ในประวัติ git ของไฟล์นี้)
+
+> อย่าเปิดรับผู้ใช้จริงด้วยแบบ ก โดยไม่มีคนเฝ้า — ถ้า token หมดอายุกลางดึกวันเสาร์
+> คนที่สมัครสมาชิกจะไม่ได้รับ OTP และไม่มีใครรู้จนกว่าจะมีคนแจ้ง
+
+---
+
+### 16.5 ขอ verification — เตรียมของให้ครบก่อนกดส่ง
+
+Google ตรวจสามอย่าง: **เป็นเจ้าของโดเมนจริงไหม · แอปคืออะไร · ใช้ scope ไปทำอะไร**
+ยื่นทั้งที่ยังไม่ครบ = โดนตีกลับแล้วเสียเวลาอีกหนึ่งรอบ (แต่ละรอบ 3–5 วันทำการ)
+
+#### ก. ยืนยันความเป็นเจ้าของโดเมนใน Search Console
+
+ต้องใช้ **บัญชี Google เดียวกับที่เป็นเจ้าของ Cloud project**
+
+1. [search.google.com/search-console](https://search.google.com/search-console) → **Add property → Domain** → `minghe.work`
+2. คัดลอกค่า TXT ที่ให้มา → Cloudflare → **DNS → Records → Add record**
+   Type `TXT` · Name `@` · Content `google-site-verification=…`
+3. กด **Verify** — DNS อยู่ Cloudflare จึงมักผ่านในไม่กี่นาที
+4. กลับมา Cloud Console → **OAuth consent screen → Branding → Authorized domains** → เพิ่ม `minghe.work`
+   (ช่องนี้รับเฉพาะโดเมนที่ยืนยันแล้ว ถ้าใส่ไม่ได้แปลว่าข้อ 3 ยังไม่ผ่าน)
+
+#### ข. หน้าแรกของเว็บไซต์
+
+`https://minghe.work` ต้องผ่านทุกข้อ:
+
+- [ ] เปิดดูได้โดยไม่ต้องล็อกอิน ✅ (ตอนนี้ผ่านแล้ว)
+- [ ] อธิบายชัดว่าแอปทำอะไรและใครเป็นผู้ให้บริการ ✅
+- [ ] **มีลิงก์ไปนโยบายความเป็นส่วนตัวเห็นได้จากหน้าแรก** ✅ (อยู่ท้ายหน้า)
+- [ ] ชื่อแบรนด์บนเว็บตรงกับ *App name* ในหน้า consent screen ← ตรวจให้ตรงกันเป๊ะ
+
+#### ค. 🔴 นโยบายความเป็นส่วนตัว — จุดที่จะโดนตีกลับแน่ถ้าไม่แก้
+
+`https://minghe.work/legal/privacy` ตอนนี้ขึ้นว่า **"ร่าง — ยังไม่มีผลบังคับใช้"** และมีตัวยึด
+`[ชื่อนิติบุคคลตามหนังสือรับรอง]` ค้างอยู่ ผู้ตรวจของ Google ถือว่าใช้ไม่ได้ ต้องแก้ก่อนยื่น:
+
+- [ ] เติมข้อมูลนิติบุคคลจริงใน `apps/app/lib/legal/types.ts` แทนตัวยึดทุกช่อง
+- [ ] เปลี่ยน `status` จาก `draft` เป็น `published` ใน `apps/app/lib/legal/privacy.ts`
+- [ ] **เพิ่มหัวข้อว่าด้วยข้อมูลจาก Google โดยเฉพาะ** ต้องระบุให้ครบสี่เรื่อง:
+      เข้าถึงข้อมูลอะไร (สิทธิ์ส่งอีเมลจากบัญชีของผู้ให้บริการเอง) · เอาไปใช้ทำอะไร (ส่ง OTP และลิงก์รายงาน) ·
+      เก็บไว้ที่ไหนนานแค่ไหน · แบ่งปันให้ใครบ้าง (ไม่แบ่งปัน)
+- [ ] ประกาศ **Limited Use** ตามถ้อยคำที่ Google กำหนด ว่าการใช้ข้อมูลจาก Google API
+      เป็นไปตาม *Google API Services User Data Policy* รวมถึงข้อกำหนด Limited Use
+- [ ] deploy ให้ขึ้นจริงแล้วเปิดดูด้วยหน้าต่างไม่ระบุตัวตน ยืนยันว่าเข้าถึงได้โดยไม่ล็อกอิน
+
+#### ง. โลโก้แอป
+
+PNG สี่เหลี่ยมจัตุรัส 120×120 px ขึ้นไป · ต้องเป็นงานของเราเอง · อัปโหลดที่ **Branding → App logo**
+(ใช้ `logo.png` ในเรพอได้ แต่ต้องครอปเป็นจัตุรัสก่อน)
+
+#### จ. คำอธิบายเหตุผลของ scope
+
+ช่อง *Scope justification* เขียนเป็นภาษาอังกฤษ ตรงประเด็น อย่ายาวเกินจำเป็น ตัวอย่างที่ใช้ได้:
+
+> We use `gmail.send` only to send transactional email from our own company mailbox to users who
+> register on our website: a one-time verification code during sign-up and password reset, and a
+> link to the astrology report the user purchased. We never read, list, modify or delete any
+> message, and we never access any end user's Gmail account — the only account authorized is the
+> service owner's own mailbox. No narrower scope exists for sending mail; `gmail.compose` would
+> require broader draft access than we need.
+
+#### ฉ. วิดีโอสาธิต
+
+อัปขึ้น YouTube แบบ **Unlisted** แล้ววางลิงก์ในแบบฟอร์ม · ต้องเห็นครบตามลำดับนี้ในคลิปเดียว ไม่ตัดต่อข้าม:
+
+1. เปิด `https://minghe.work` ให้เห็น URL บนแถบที่อยู่ — พิสูจน์ว่าแอปตรงกับโดเมนที่ยื่น
+2. เริ่มโฟลว์ขออนุญาต จนเห็น **หน้า consent ของ Google เต็ม ๆ** ที่แสดง **ชื่อแอป** และ **รายการ scope**
+3. กด Allow ให้เห็นว่าอนุญาตสำเร็จ
+4. สาธิตว่าเอาสิทธิ์นั้นไปใช้ทำอะไร — สมัครสมาชิกบนเว็บจริง แล้วเปิดกล่องจดหมายให้เห็นอีเมล OTP ที่ส่งถึง
+5. พูดหรือใส่คำบรรยายภาษาอังกฤษกำกับสั้น ๆ ว่ากำลังทำอะไรอยู่
+
+> คลิปที่ไม่เห็นหน้า consent screen พร้อมรายชื่อ scope คือสาเหตุที่โดนตีกลับบ่อยที่สุด
+
+### 16.6 กดยื่น
+
+**OAuth consent screen → Publish app** → ระบบจะพาไปหน้า **Verification** → กรอกให้ครบ:
+
+| ช่อง | ใส่อะไร |
+|---|---|
+| Scope justification | ข้อความจาก 16.5 จ |
+| Demo video link | ลิงก์ YouTube unlisted จาก 16.5 ฉ |
+| App homepage | `https://minghe.work` |
+| Privacy policy | `https://minghe.work/legal/privacy` |
+| Terms of service | `https://minghe.work/legal/terms` |
+
+กด **Submit for verification** → จะได้อีเมลยืนยันการรับเรื่อง เก็บ thread นั้นไว้ ทุกรอบการตอบกลับใช้ thread เดียวกัน
+
+### 16.7 ระหว่างรอ
+
+- ตอบกลับอีเมลของทีมตรวจ **ภายใน 2–3 วัน** ทุกครั้ง — ทิ้งไว้นานเกินคำขอจะถูกปิดแล้วต้องยื่นใหม่
+- ห้ามแก้ Client ID, ชื่อแอป, หรือโดเมนระหว่างรอ จะทำให้เริ่มนับหนึ่งใหม่
+- 🔴 **หลังกด Publish การขออนุญาตใหม่จะถูกบล็อกจนกว่าจะอนุมัติ** — refresh token เดิมที่ได้มา
+  ตอนอยู่ Testing ยังใช้ต่อได้จนหมดอายุ 7 วัน แล้วจะขอใหม่ไม่ได้
+  **จึงต้องมีแผนสำรองตาม 16.4 แบบ ข รออยู่ก่อนกดยื่น** ไม่งั้นระบบสมัครสมาชิกจะตายกลางทาง
+
+### 16.8 กรอบเวลาที่ควรคาดหวัง
+
+| ช่วง | ระยะเวลาปกติ |
+|---|---|
+| ตอบรับเรื่องครั้งแรก | 3–5 วันทำการ |
+| แต่ละรอบที่ขอข้อมูลเพิ่ม | 3–5 วันทำการ |
+| รวมจนอนุมัติ | **1–4 สัปดาห์** ขึ้นกับว่าโดนขอแก้กี่รอบ |
+
+`gmail.send` เป็น *sensitive* ไม่ใช่ *restricted* จึง **ไม่ต้องผ่านการตรวจความปลอดภัยโดยผู้ประเมินภายนอก (CASA)**
+ซึ่งเป็นขั้นที่มีค่าใช้จ่ายหลักหมื่นและใช้เวลาเป็นเดือน — ถือว่าโชคดีที่โค้ดใช้แค่สิทธิ์ส่ง
+
+### 16.9 สาเหตุที่โดนตีกลับบ่อย และคำตอบที่ควรเตรียมไว้
+
+| ผู้ตรวจทักว่า | แก้อย่างไร |
+|---|---|
+| นโยบายความเป็นส่วนตัวไม่พูดถึงข้อมูลจาก Google | ทำตาม 16.5 ค ให้ครบทั้งสี่เรื่อง + Limited Use |
+| นโยบายยังเป็นฉบับร่าง / มีช่องว่างไม่ได้เติม | เปลี่ยน `status` เป็น `published` และเติมข้อมูลนิติบุคคลจริง |
+| วิดีโอไม่แสดงหน้า consent พร้อม scope | ถ่ายใหม่ตาม 16.5 ฉ ข้อ 2 |
+| ชื่อแอปไม่ตรงกับแบรนด์บนเว็บไซต์ | แก้ *App name* ให้ตรงกับที่แสดงบน `minghe.work` |
+| **"แอปนี้เข้าถึงเฉพาะบัญชีของผู้พัฒนาเอง ไม่จำเป็นต้องยื่น verification"** | คำตอบนี้พบบ่อยกับการใช้งานแบบเรา — ถ้าได้คำตอบนี้ แปลว่า Google กำลังชี้ไปที่ทางลัดใน 16.0 (Workspace + Internal) ให้ชั่งใจอีกครั้งว่าจะจ่ายค่า Workspace หรือย้ายไปผู้ให้บริการส่งอีเมลโดยเฉพาะ |
