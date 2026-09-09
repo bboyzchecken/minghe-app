@@ -29,6 +29,18 @@
         "4312"
       ],
       "port": 4312
+    },
+    {
+      "name": "minghe-out",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4313",
+        "--directory",
+        "apps/app/out"
+      ],
+      "port": 4313
     }
   ]
 }

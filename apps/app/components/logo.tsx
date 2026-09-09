@@ -46,6 +46,7 @@ export function Logo({
   height = 30,
   className = '',
   href = '/',
+  priority = false,
 }: {
   variant?: Variant
   /** ทางลัดเดิม — มี tagline คือใช้ lockup */
@@ -56,6 +57,11 @@ export function Logo({
   className?: string
   /** ใส่ null เมื่อโลโก้อยู่ในหน้าแรกอยู่แล้ว จะได้ไม่มีลิงก์วนไปหาตัวเอง */
   href?: string | null
+  /**
+   * โหลดทันทีแทนที่จะ lazy — ใช้กับโลโก้บน header เท่านั้น (อยู่บนสุดของทุกหน้า)
+   * ตัวที่อยู่ท้ายหน้าหรือกลางหน้าปล่อย lazy ไว้ ไม่งั้นจะไปแย่งคิวโหลดกับรูป LCP
+   */
+  priority?: boolean
 }) {
   const asset = ASSETS[variant ?? (withTagline ? 'lockup' : 'wordmark')]
   const width = Math.round((asset.width / asset.height) * height)
@@ -66,7 +72,8 @@ export function Logo({
       alt="命合 Mìnghé — สมพงษ์คนกับองค์กร"
       width={width}
       height={height}
-      priority
+      priority={priority}
+      loading={priority ? 'eager' : 'lazy'}
       className="h-auto w-auto"
       style={{ height, width }}
     />

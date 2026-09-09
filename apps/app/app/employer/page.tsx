@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { ElementIcon } from '@/components/element-icon'
+import { Picture } from '@/components/picture'
 
 export const metadata: Metadata = { title: 'สำหรับองค์กร' }
 
@@ -71,7 +72,14 @@ export default function EmployerIntro() {
         </div>
         <div className="relative">
           <div className="overflow-hidden rounded-[28px] border border-line shadow-lift">
-            <img src="/img/employer.jpg" alt="Employer" className="aspect-[4/5] w-full object-cover object-top" width={1024} height={1280} />
+            <Picture
+              src="/img/employer.jpg"
+              alt="Employer"
+              className="aspect-[4/5] w-full object-cover object-top"
+              width={1024}
+              height={1280}
+              priority
+            />
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/30 to-transparent" />
           </div>
           <div className="absolute -bottom-5 -left-3 w-[78%] rounded-2xl border border-white/40 bg-cloud/85 p-5 shadow-lift backdrop-blur-md sm:-left-5">

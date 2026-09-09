@@ -5,3 +5,12 @@ Caddyfile text eol=lf
 
 # ปกติให้ normalize เป็น LF ใน repo
 * text=auto eol=lf
+
+# ไฟล์ไบนารี — ห้าม normalize บรรทัดเด็ดขาด ไม่งั้นฟอนต์/รูปเสียตอน checkout ข้ามแพลตฟอร์ม
+*.woff2 binary
+*.woff binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.ico binary

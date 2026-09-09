@@ -46,7 +46,7 @@ export function SiteHeader() {
     <header className="no-print sticky top-0 z-40 border-b border-line/70 bg-paper/85 backdrop-blur-md">
       <div className="container-page flex h-16 items-center justify-between">
         {/* F-11 — โลโก้จริงแบบไม่มี tagline (ชิ้นที่ออกแบบมาสำหรับพื้นที่แคบ) */}
-        <Logo variant="wordmark" height={34} />
+        <Logo variant="wordmark" height={34} priority />
         <nav className="hidden items-center gap-7 md:flex">
           {NAV.map((n) => (
             <Link

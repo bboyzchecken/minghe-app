@@ -10,7 +10,7 @@
 # ถ้าจะกลับไปใช้ Pages ทีหลัง แค่เลิกชี้ WEB_DOMAIN มาที่เครื่องนี้ ไม่ต้องแก้อะไรในบล็อกนี้
 
 {$API_DOMAIN:api.minghe.work} {
-	encode gzip
+	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
@@ -22,7 +22,7 @@
 }
 
 {$WEB_DOMAIN:uat.minghe.work} {
-	encode gzip
+	encode zstd gzip
 	root * /srv/web
 
 	header {
@@ -39,6 +39,12 @@
 	# หน้า HTML ต้องไม่ถูกแคช ไม่งั้น deploy ใหม่แล้วผู้ทดสอบยังเห็นของเก่า
 	@html path *.html /
 	header @html Cache-Control "no-cache"
+
+	# รูปและโลโก้ไม่มีลายนิ้วมือในชื่อไฟล์ จึงแคชยาวเท่า _next/static ไม่ได้
+	# 7 วัน + stale-while-revalidate: คนที่กลับมาเยี่ยมซ้ำไม่ต้องโหลดรูปใหม่ทั้งชุด
+	# แต่ถ้าเปลี่ยนรูป ก็กระจายถึงทุกคนภายในสัปดาห์เดียว
+	@media path /img/* /brand/* /favicon.ico /icon.png /apple-icon.png
+	header @media Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
 
 	# next.config.mjs ตั้ง trailingSlash: true → ทุกหน้าเป็น <path>/index.html
 	# file_server เดาไฟล์ index ให้เองอยู่แล้ว แต่ต้องมีทางลงให้ URL ที่ไม่มีจริง

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ELEMENT_META, ELEMENT_ORDER, type ElementKey } from '@/lib/brand'
 import { ElementIcon } from './element-icon'
+import { Picture } from './picture'
 
 type View = 'man' | 'woman' | 'texture'
 
@@ -49,10 +50,12 @@ export function ElementGallery() {
       {/* feature */}
       <div className="mt-6 grid gap-6 md:grid-cols-[minmax(0,0.9fr)_1fr] md:items-center">
         <div className="relative overflow-hidden rounded-2xl border border-line">
-          <img
+          <Picture
             key={imgOf(el, view)}
             src={imgOf(el, view)}
             alt={`${m.th} · ${view}`}
+            width={832}
+            height={1216}
             className="fade-up aspect-[4/5] w-full object-cover"
           />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/25 to-transparent" />

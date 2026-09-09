@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ELEMENT_META, ELEMENT_ORDER } from '@/lib/brand'
 import { ElementIcon } from '@/components/element-icon'
 import { Logo } from '@/components/logo'
+import { Picture } from '@/components/picture'
 import { ElementGallery } from '@/components/element-gallery'
 import {
   BRAND_BAND,
@@ -63,12 +64,13 @@ export default function LandingPage() {
           <div className="fade-up relative">
             <div className="relative overflow-hidden rounded-[28px] border border-line shadow-lift">
               {/* F-16 — ภาพ hero ที่ represent ครบห้าธาตุ (ไม้ ไฟ ดิน ทอง น้ำ) ตามสไลด์หน้า 5 */}
-              <img
+              <Picture
                 src="/img/hero-elements.jpg"
                 alt="命合 Mìnghé — ไม้ ไฟ ดิน ทอง น้ำ ครบห้าธาตุ"
                 className="aspect-[3/4] w-full object-cover object-center"
                 width={960}
                 height={1280}
+                priority
               />
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/25 via-transparent to-transparent" />
             </div>
@@ -212,10 +214,11 @@ export default function LandingPage() {
       {/* ---------- BRAND BAND ---------- */}
       <section className="container-page py-8 md:py-12">
         <div className="relative overflow-hidden rounded-[28px] border border-line shadow-card">
-          <img
+          <Picture
             src="/img/brand-band.jpg"
             alt="命合 Mìnghé — ห้าธาตุ"
-            loading="lazy"
+            width={1440}
+            height={608}
             className="h-56 w-full object-cover md:h-72"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-paper/95 via-paper/55 to-transparent" />
@@ -285,10 +288,11 @@ function ProductCard({
       className="group flex flex-col overflow-hidden rounded-[28px] border border-line bg-card shadow-card transition hover:shadow-lift"
     >
       <div className="relative aspect-[16/10] overflow-hidden">
-        <img
+        <Picture
           src={img}
           alt={title}
-          loading="lazy"
+          width={1024}
+          height={1280}
           className="h-full w-full object-cover object-top transition duration-500 group-hover:scale-[1.04]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-ink/40 via-ink/5 to-transparent" />

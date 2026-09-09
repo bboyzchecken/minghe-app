@@ -58,3 +58,34 @@ cp apps/app/public/img/employer-b.jpg apps/app/public/img/employer.jpg
 ```
 
 prompt ทั้งหมดอยู่ในตัวสคริปต์ — แก้ prompt แล้วรันใหม่ได้เลย seed ถูกตรึงไว้เพื่อให้เจนซ้ำได้ผลเดิม
+
+## `optimize-images.py` — บีบภาพใน `public/img` (งานเร็วเว็บ)
+
+ภาพชุดเดิมถูกเรนเดอร์มาด้วย quality สูงมาก (ไฟล์ละ 200-370 KB) เกินความจำเป็นสำหรับ
+ขนาดที่แสดงจริงบนหน้าเว็บ สคริปต์นี้บีบ JPEG ทับที่เดิม (quality 82 + progressive)
+แล้วสร้าง `.webp` คู่กันไว้ให้ `<Picture>` (`apps/app/components/picture.tsx`) เลือกใช้ก่อน
+
+```bash
+python tools/brand/optimize-images.py
+```
+
+รันซ้ำได้ ไม่พัง — แต่ไม่ได้อะไรเพิ่ม (ไฟล์ที่เล็กอยู่แล้วจะไม่ถูกเขียนทับ)
+
+> **ถ้าเพิ่มรูปใหม่ลง `public/img/`** ให้รันสคริปต์นี้ก่อน commit
+> ไม่งั้น `<Picture>` จะชี้ไปที่ `.webp` ที่ยังไม่มี แล้วเบราว์เซอร์จะตกไปโหลด `.jpg` ก้อนใหญ่แทน
+
+## `subset-cjk-font.py` — ฟอนต์จีนฉบับ subset
+
+ดึง `Noto_Serif_SC` จาก `next/font/google` ตรง ๆ จะได้ @font-face กลับมา 300+ ก้อน
+(ซอยตามช่วง unicode ของตัวจีนทั้งชุด) กลายเป็น CSS ~279 KB ที่บล็อกการเรนเดอร์ทุกหน้า
+ทั้งที่เว็บนี้ใช้ตัวจีนจริงแค่ ~225 ตัว
+
+```bash
+python tools/brand/subset-cjk-font.py
+```
+
+ผลลัพธ์ลง `apps/app/app/fonts/noto-serif-sc-subset-400.woff2` (~42 KB) — `app/layout.tsx`
+เรียกผ่าน `next/font/local`
+
+> **ต้องรันใหม่เมื่อเพิ่มตัวจีนตัวใหม่ลงในโค้ด** ถ้าลืม ตัวที่ขาดจะไม่ขึ้นเป็นสี่เหลี่ยมเปล่า
+> แต่ตกไปใช้ฟอนต์จีนของระบบ (ดู `fallback` ใน `app/layout.tsx`) ซึ่งหน้าตาจะหลุดโทนแบรนด์
