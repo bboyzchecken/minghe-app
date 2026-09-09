@@ -706,7 +706,8 @@ $pub = (Get-Content "$env:USERPROFILE\.ssh\minghe_do.pub" -Raw).Trim()
 ssh root@<DROPLET_IP> "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '$pub' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 ```
 
-`.Trim()` สำคัญกว่าที่เห็น — ไฟล์บน Windows ลงท้ายด้วย CRLF ถ้าปล่อยไว้ `` จะติดไปในบรรทัด
+`.Trim()` สำคัญกว่าที่เห็น — ไฟล์บน Windows ลงท้ายด้วย CRLF ถ้าปล่อยไว้ `
+` จะติดไปในบรรทัด
 `authorized_keys` แล้ว sshd จะไม่ยอมรับคีย์นั้น โดยไม่ฟ้องอะไรเลย เห็นแค่ว่ายังถามรหัสผ่านอยู่
 
 ### 14.4 💻 ทดสอบว่าคีย์ใช้ได้จริง
@@ -756,8 +757,20 @@ nano /opt/minghe/.env
 Get-Content "$env:USERPROFILE\.ssh\minghe_do" -Raw | Set-Clipboard
 ```
 
-แล้ววางในช่อง `DEPLOY_SSH_KEY` ที่หน้า GitHub → Settings → Environments → `production`
-ต้องได้ทั้งไฟล์ตั้งแต่ `-----BEGIN OPENSSH PRIVATE KEY-----` ถึง `-----END OPENSSH PRIVATE KEY-----`
+**เส้นทางที่ถูกต้องมีทางเดียว:** repo → **Settings → Environments → `production` → Environment secrets → Add secret**
+ชื่อ `DEPLOY_SSH_KEY` · ค่า = ทั้งไฟล์ตั้งแต่ `-----BEGIN OPENSSH PRIVATE KEY-----` ถึง `-----END OPENSSH PRIVATE KEY-----`
+
+> 🔴 **ห้ามวางที่ Settings → Deploy keys** — คนละเรื่องกันคนละทาง
+>
+> | | Deploy keys | Environment secrets |
+> |---|---|---|
+> | ใช้ทำอะไร | ให้เครื่องภายนอก **อ่าน/เขียน repo นี้** ผ่าน git | เก็บความลับให้ workflow เอาไปใช้ |
+> | รับคีย์ชนิดไหน | **public key** (`.pub`) | อะไรก็ได้ที่เป็นข้อความ |
+> | โปรเจกต์นี้ใช้ไหม | **ไม่ใช้เลย** — workflow เช็กเอาต์ repo ด้วย `GITHUB_TOKEN` อยู่แล้ว | ใช้ — `DEPLOY_SSH_KEY` อยู่ที่นี่ |
+>
+> วาง private key ในหน้า Deploy keys จะได้ error `Key is invalid. You must supply a key in OpenSSH public key format`
+> เพราะช่องนั้นรอ public key อยู่ · **ถ้าเผลอกด Add ไปแล้ว ให้สร้างคู่คีย์ใหม่ตาม §14.1–14.4**
+> ค่านั้นถูกส่งขึ้นเซิร์ฟเวอร์ในฐานะข้อมูลธรรมดาที่ไม่ถูกปกปิดในล็อก ต่างจากช่อง secret ที่ถูกปิดบังตั้งแต่ต้นทาง
 
 ### 14.9 💻 คำสั่งตรวจผล (แทน curl/nslookup แบบ bash)
 
