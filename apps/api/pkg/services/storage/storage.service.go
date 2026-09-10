@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"path"
 	"time"
@@ -13,6 +14,9 @@ import (
 	"github.com/minghe/api/pkg/core"
 	"github.com/minghe/api/pkg/logger"
 )
+
+// verifyTimeout — เวลารอสูงสุดของการตรวจ R2 ตอนบูต
+const verifyTimeout = 10 * time.Second
 
 type StorageService struct {
 	client *s3.Client
@@ -35,6 +39,9 @@ func New(cfg core.Config) *StorageService {
 		return s
 	}
 	s.client = client
+	// ยืนยันว่าคีย์ใช้ได้จริงและ bucket มีอยู่ โดยไม่บล็อก startup —
+	// ถ้ารอ HeadBucket ตอนบูตแล้ว R2 ช้าหรือล่ม API จะขึ้นช้าตามไปด้วยโดยไม่จำเป็น
+	go s.logVerification()
 	return s
 }
 
@@ -90,3 +97,35 @@ func (s *StorageService) PresignedURL(ctx context.Context, bucket, key string, t
 
 func (s *StorageService) ImageBucket() string { return s.config.ImageBucket }
 func (s *StorageService) VideoBucket() string { return s.config.VideoBucket }
+
+// Verify ยิง HeadBucket ทีละ bucket เพื่อพิสูจน์ว่าคีย์ถูกและ bucket มีอยู่จริง
+//
+// ต่างจาก Enabled() ที่บอกแค่ว่า "ตั้งค่าครบ" — คีย์ที่พิมพ์ผิด, endpoint ผิด account
+// หรือ token ที่ไม่มีสิทธิ์กับ bucket นั้น จะเงียบสนิทจนกว่าจะมีคนอัปโหลดไฟล์แรก
+func (s *StorageService) Verify(ctx context.Context) error {
+	if !s.Enabled() {
+		return ErrStorageDisabled
+	}
+	for _, bucket := range []string{s.config.ImageBucket, s.config.VideoBucket} {
+		if bucket == "" {
+			continue
+		}
+		if _, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &bucket}); err != nil {
+			return fmt.Errorf("bucket %s: %w", bucket, err)
+		}
+	}
+	return nil
+}
+
+// logVerification เขียนผลการตรวจลง log ตอนบูต — บรรทัดนี้คือหลักฐานเดียวที่บอกว่า
+// ตั้งค่า R2 บน production สำเร็จหรือไม่ ตราบใดที่ยังไม่มี endpoint อัปโหลดให้ลองยิง
+func (s *StorageService) logVerification() {
+	ctx, cancel := context.WithTimeout(context.Background(), verifyTimeout)
+	defer cancel()
+
+	if err := s.Verify(ctx); err != nil {
+		logger.Error("R2: ต่อไม่ติด — ตรวจ R2_ENDPOINT / R2_ACCESS_KEY / R2_SECRET_KEY และชื่อ bucket: ", err)
+		return
+	}
+	logger.Info("R2: ต่อติดแล้ว — bucket ", s.config.ImageBucket, " และ ", s.config.VideoBucket, " พร้อมใช้งาน")
+}

@@ -154,6 +154,8 @@ func loadConfig() core.Config {
 			RefreshToken: viper.GetString("GMAIL_REFRESH_TOKEN"),
 			AccessToken:  viper.GetString("GMAIL_ACCESS_TOKEN"),
 			SenderEmail:  viper.GetString("GMAIL_SENDER_EMAIL"),
+			SenderName: firstNonEmpty(viper.GetString("GMAIL_SENDER_NAME"),
+				viper.GetString("MAIL_SENDER_NAME"), "命合 Mìnghé"),
 		},
 		OAuth: core.OAuthConfig{
 			GoogleClientID:     viper.GetString("GOOGLE_OAUTH_CLIENT_ID"),
