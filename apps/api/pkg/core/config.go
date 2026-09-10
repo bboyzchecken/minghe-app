@@ -61,14 +61,14 @@ type RedisConfig struct {
 	Password string
 }
 
-// ResendConfig — ช่องทางหลักในการส่งอีเมล OTP (ตั้งแต่ 10 ก.ย. 2569)
+// ResendConfig — ช่องทางที่เตรียมไว้แต่ยังไม่ได้เปิดใช้ (ยังไม่มีบัญชี ณ 10 ก.ย. 2569)
 //
-// ย้ายมาจาก SMTP เพราะ DigitalOcean บล็อกพอร์ต SMTP ขาออกทุกพอร์ตของ Droplet นี้
-// (ทดสอบแล้วตันหมดทั้ง 25 / 80 / 465 / 587 / 3535) และการขอปลดล็อกต้องเปิด ticket
-// รอหลายวันโดยไม่รับประกันว่าจะได้
+// เก็บไว้เพราะเป็นทางออกสำรองที่วิ่งผ่าน HTTPS 443 เหมือน Gmail API จึงไม่ติดนโยบาย
+// บล็อกพอร์ต SMTP ขาออกของ DigitalOcean เช่นกัน — และถ้าวันหนึ่งต้องการให้อีเมลออก
+// จาก info@minghe.work จริง ๆ (Gmail ส่งได้แค่ในนามบัญชีที่ล็อกอินเข้าไป) นี่คือทาง
+// ที่สั้นที่สุด แลกกับการเพิ่ม DKIM ของ Resend ใน DNS
 //
-// Resend ส่งผ่าน HTTPS พอร์ต 443 จึงไม่มีทางถูกบล็อกด้วยนโยบายกันสแปมแบบเดียวกัน
-// ตั้ง APIKey ว่างไว้ = ไม่ใช้ช่องทางนี้ แล้วระบบจะถอยไปใช้ SMTP ตามเดิม
+// ตั้ง APIKey ว่างไว้ = ไม่ใช้ช่องทางนี้
 type ResendConfig struct {
 	APIKey string
 	/** ที่อยู่ผู้ส่ง — ต้องอยู่ในโดเมนที่ยืนยันแล้วใน Resend */
@@ -77,17 +77,21 @@ type ResendConfig struct {
 	SenderName string
 }
 
-// SMTPConfig — ช่องทางสำรองที่หนึ่ง (ใช้ไม่ได้บน Droplet ที่ถูกบล็อกพอร์ต SMTP)
+// SMTPConfig — ช่องทางที่ดีที่สุดในทางทฤษฎี แต่ยิงออกจาก Droplet ปัจจุบันไม่ได้
 //
-// ย้ายจาก Gmail API มาใช้ SMTP ตรง เพราะ scope gmail.send เป็น sensitive scope
-// ที่ Google บล็อกการอนุญาตทั้งหมดจนกว่าแอปจะผ่านการตรวจ ("Access blocked:
-// … has not completed the Google verification process") ซึ่งใช้เวลาเป็นสัปดาห์
+// ส่งผ่าน GoDaddy ในนาม info@minghe.work ได้เปรียบชัดเจน: SPF ของโดเมนคือ
+// `v=spf1 include:secureserver.net -all` อยู่แล้ว จึงผ่าน SPF ทันทีโดยไม่ต้องแตะ DNS
+// และผู้รับเห็นที่อยู่ของโดเมนตัวเอง ไม่ใช่ @gmail.com
 //
-// ส่งผ่าน SMTP ของ GoDaddy ในนาม info@minghe.work ยังได้เปรียบอีกข้อ:
-// SPF ของโดเมนคือ `v=spf1 include:secureserver.net -all` อยู่แล้ว จึงผ่าน SPF
-// ทันทีโดยไม่ต้องแตะ DNS — ต่างจากการส่งผ่าน Google ที่ต้องเพิ่ม include ก่อน
+// ที่ใช้ไม่ได้เพราะ DigitalOcean บล็อกพอร์ต SMTP ขาออก — วัดจริงจากเครื่อง production
+// เมื่อ 10 ก.ย. 2569 ได้ผลว่า 25 / 465 / 587 ตันหมด ขณะที่พอร์ตเดียวกันยิงจากเครื่อง
+// ที่บ้านติดปกติ จึงเป็นการบล็อกฝั่ง DO ไม่ใช่ GoDaddy ปฏิเสธเรา
+// (80 / 3535 ตันทั้งสองฝั่ง = GoDaddy ไม่ได้เปิดพอร์ตพวกนั้นตั้งแต่แรก)
 //
-// ตั้ง Host ว่างไว้ = ไม่ใช้ช่องทางนี้ แล้วระบบจะถอยไปใช้ Gmail API ตามเดิม
+// วิธีปลด: เปิด ticket ขอ DigitalOcean ปลดล็อก SMTP ขาออก แล้วสลับกลับมาด้วยการตั้ง
+// MAIL_TRANSPORT=smtp อย่างเดียว ไม่ต้องแก้โค้ดหรือ deploy ใหม่
+//
+// ตั้ง Host ว่างไว้ = ไม่ใช้ช่องทางนี้
 type SMTPConfig struct {
 	Host     string
 	Port     string
@@ -105,7 +109,10 @@ type GoogleAPIConfig struct {
 	ClientSecret string
 	RefreshToken string
 	AccessToken  string
-	SenderEmail  string
+	/** ที่อยู่ผู้ส่ง — ต้องเป็นบัญชีที่ออก refresh token หรือ alias ที่ยืนยันใน Gmail แล้ว */
+	SenderEmail string
+	/** ชื่อที่แสดงหน้าที่อยู่ เช่น 命合 Mìnghé — ไม่ตั้ง = ผู้รับเห็นแค่อีเมลเปล่า ๆ */
+	SenderName string
 }
 
 // OAuthConfig — Sign in with Google ฝั่งผู้ใช้ (F-02) คนละชุดกับ GoogleAPIConfig

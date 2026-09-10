@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -18,10 +19,22 @@ func Middleware() echo.MiddlewareFunc {
 			req := c.Request()
 			res := c.Response()
 
+			// echo เรียก HTTPErrorHandler หลัง middleware ทุกชั้นคืนค่าแล้ว ตอนนี้ res.Status
+			// จึงยังเป็น 200 ตามค่าเริ่มต้นเสมอ — ถ้าอ่านตรง ๆ log จะรายงาน 404/401/500
+			// เป็น 200 หมด (เคยทำให้เข้าใจผิดว่า API ตอบไฟล์ .env ที่บอตมาสแกนจริง)
+			status := res.Status
+			if err != nil && !res.Committed {
+				if httpErr, ok := err.(*echo.HTTPError); ok {
+					status = httpErr.Code
+				} else {
+					status = http.StatusInternalServerError
+				}
+			}
+
 			entry := log.WithFields(logrus.Fields{
 				"method":   req.Method,
 				"path":     req.URL.Path,
-				"status":   res.Status,
+				"status":   status,
 				"latency":  time.Since(start).String(),
 				"remote":   c.RealIP(),
 				"user_id":  c.Get("id"),
@@ -29,9 +42,9 @@ func Middleware() echo.MiddlewareFunc {
 			})
 
 			switch {
-			case res.Status >= 500:
+			case status >= 500:
 				entry.Error("request failed")
-			case res.Status >= 400:
+			case status >= 400:
 				entry.Warn("request rejected")
 			default:
 				entry.Info("request")

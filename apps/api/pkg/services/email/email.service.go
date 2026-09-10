@@ -333,9 +333,13 @@ func (s *EmailService) dialSMTP() (*smtp.Client, error) {
 }
 
 func (s *EmailService) sendGmailAPI(to, subject, htmlBody string) error {
+	// Gmail ส่งในนามบัญชีที่ออก refresh token เสมอ — ค่านี้จึงมีผลแค่กับหัวจดหมาย
+	// ที่ผู้รับเห็น และต้องตรงกับบัญชีนั้นหรือ alias ที่ยืนยันไว้ ไม่งั้น Gmail เขียนทับให้เอง
 	from := s.config.SenderEmail
 	if from == "" {
 		from = "me"
+	} else if s.config.SenderName != "" {
+		from = fmt.Sprintf("%s <%s>", mime.QEncoding.Encode("utf-8", s.config.SenderName), from)
 	}
 
 	var msg strings.Builder
