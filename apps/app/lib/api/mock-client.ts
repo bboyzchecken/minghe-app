@@ -955,6 +955,8 @@ export const mockClient: MingheClient = {
       googleLoginEnabled: true,
       googleClientId: undefined,
       googleLoginNote: 'โหมดสาธิต — เลือกบัญชี Google จำลองได้โดยไม่ต้องมี OAuth client',
+      // โหมด mock แสดงรหัสบนจออยู่แล้ว จึงคงโฟลว์ OTP ไว้ให้เห็นครบทุกขั้น
+      otpRequired: true,
       mockAccounts: MOCK_ACCOUNTS,
     }
   },

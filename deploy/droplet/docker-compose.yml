@@ -38,6 +38,9 @@ services:
       ENV: production
       PORT: '5000'
       MINGHE_MODE: live
+      # ช่วงทดสอบ: สมัครสมาชิกไม่ต้องยืนยันอีเมลด้วย OTP (รีเซ็ตรหัสผ่านยังต้องใช้ OTP)
+      # เปิดกลับได้โดยใส่ MINGHE_OTP_REQUIRED=true ใน .env แล้ว docker compose up -d api
+      MINGHE_OTP_REQUIRED: ${MINGHE_OTP_REQUIRED:-false}
       MYSQL_HOST: db
       MYSQL_PORT: '3306'
       MYSQL_USERNAME: root

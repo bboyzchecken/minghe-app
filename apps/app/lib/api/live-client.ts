@@ -500,6 +500,7 @@ export const liveClient: MingheClient = {
         google_login_enabled: boolean
         google_client_id?: string
         google_login_note?: string
+        otp_required?: boolean
         mock_accounts: (MockAccount & { org_role?: string })[] | null
       }>('/mode')
       return {
@@ -507,6 +508,8 @@ export const liveClient: MingheClient = {
         googleLoginEnabled: Boolean(res.google_login_enabled && res.google_client_id),
         googleClientId: res.google_client_id || undefined,
         googleLoginNote: res.google_login_note || undefined,
+        // API รุ่นก่อนไม่มีฟิลด์นี้ → ถือว่ายังบังคับ OTP
+        otpRequired: res.otp_required !== false,
         mockAccounts: (res.mock_accounts ?? []).map((a) => ({
           ...a,
           orgRole: a.org_role === 'owner' || a.org_role === 'hr' ? a.org_role : undefined,
@@ -514,7 +517,7 @@ export const liveClient: MingheClient = {
       }
     } catch {
       // ติดต่อ API ไม่ได้ — ปิดปุ่ม Google ไว้ก่อน ดีกว่าปล่อยให้กดแล้วค้าง
-      return { mode: 'live', googleLoginEnabled: false, mockAccounts: [] }
+      return { mode: 'live', googleLoginEnabled: false, otpRequired: true, mockAccounts: [] }
     }
   },
 

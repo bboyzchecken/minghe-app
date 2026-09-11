@@ -6,6 +6,7 @@
  *   2. กรอก OTP + ชื่อ + รหัสผ่าน → สร้างบัญชี (ฝั่งองค์กรจะได้องค์กรที่ตัวเองเป็นเจ้าของทันที)
  *
  * ต้องยืนยันอีเมลก่อนใช้งานเสมอ เพราะรายงานส่งทางอีเมล — พิมพ์ผิด = จ่ายแล้วไม่ได้ของ (ข้อสรุป F-02)
+ * ยกเว้นเมื่อ API ปิด OTP ไว้ (/mode → otp_required=false) จะเหลือขั้นเดียว กรอกทุกอย่างแล้วสร้างบัญชีเลย
  * สมัครสำเร็จแล้วเข้าระบบทันที และเด้งกลับไปหน้าที่ค้างไว้ (F-03)
  */
 
@@ -15,12 +16,13 @@ import { useEffect, useState } from 'react'
 import { GoogleSignInButton } from '@/components/google-sign-in-button'
 import { OtpField, OtpHint } from '@/components/otp-field'
 import type { AccountType, OtpChallenge } from '@/lib/api'
-import { useRegister, useRequestRegister } from '@/lib/queries'
+import { useRegister, useRequestRegister, useRuntimeConfig } from '@/lib/queries'
 import { homeForUser, takeReturnTo, useSession } from '@/lib/session'
 
 export default function RegisterPage() {
   const router = useRouter()
   const { user, loading } = useSession()
+  const { data: config } = useRuntimeConfig()
   const requestOtp = useRequestRegister()
   const register = useRegister()
 
@@ -34,18 +36,26 @@ export default function RegisterPage() {
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  // ยังโหลด /mode ไม่เสร็จ → ถือว่าต้องใช้ OTP ไว้ก่อน
+  const otpRequired = config?.otpRequired ?? true
+
   // สมัครสำเร็จ (หรือมีเซสชันอยู่แล้ว) → ออกจากหน้านี้ทางเดียว
   useEffect(() => {
     if (loading || !user) return
     router.replace(takeReturnTo() ?? homeForUser(user))
   }, [loading, user, router])
 
-  async function sendOtp() {
-    setError(null)
+  function organizationMissing() {
     if (accountType === 'employer' && !organizationName.trim()) {
       setError('กรุณาระบุชื่อองค์กร')
-      return
+      return true
     }
+    return false
+  }
+
+  async function sendOtp() {
+    setError(null)
+    if (organizationMissing()) return
     try {
       const result = await requestOtp.mutateAsync(email.trim())
       setChallenge(result)
@@ -56,6 +66,7 @@ export default function RegisterPage() {
 
   async function submitRegister() {
     setError(null)
+    if (organizationMissing()) return
     if (password.length < 8) {
       setError('รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร')
       return
@@ -82,6 +93,41 @@ export default function RegisterPage() {
 
   const step = challenge ? 2 : 1
 
+  const accountFields = (
+    <>
+      <label className="mt-4 block">
+        <span className="field-label">ชื่อที่ใช้แสดง</span>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="field"
+          placeholder={accountType === 'employer' ? 'เช่น คุณบัส' : 'เช่น คุณนุช'}
+          autoComplete="name"
+        />
+      </label>
+      <label className="mt-4 block">
+        <span className="field-label">รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)</span>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="field"
+          autoComplete="new-password"
+        />
+      </label>
+      <label className="mt-4 block">
+        <span className="field-label">ยืนยันรหัสผ่าน</span>
+        <input
+          type="password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          className="field"
+          autoComplete="new-password"
+        />
+      </label>
+    </>
+  )
+
   return (
     <div className="container-page max-w-md py-14 md:py-20">
       <div className="text-center">
@@ -93,11 +139,13 @@ export default function RegisterPage() {
       </div>
 
       <div className="card mt-8 p-6 md:p-8">
-        <ol className="mb-6 flex items-center gap-2 text-xs text-muted">
-          <StepDot n={1} active={step === 1} done={step > 1} label="อีเมล" />
-          <span className="h-px flex-1 bg-line" />
-          <StepDot n={2} active={step === 2} done={false} label="ยืนยัน + ตั้งรหัสผ่าน" />
-        </ol>
+        {otpRequired && (
+          <ol className="mb-6 flex items-center gap-2 text-xs text-muted">
+            <StepDot n={1} active={step === 1} done={step > 1} label="อีเมล" />
+            <span className="h-px flex-1 bg-line" />
+            <StepDot n={2} active={step === 2} done={false} label="ยืนยัน + ตั้งรหัสผ่าน" />
+          </ol>
+        )}
 
         {step === 1 && (
           <>
@@ -115,7 +163,7 @@ export default function RegisterPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              void sendOtp()
+              void (otpRequired ? sendOtp() : submitRegister())
             }}
             noValidate
           >
@@ -161,19 +209,33 @@ export default function RegisterPage() {
                 autoComplete="email"
               />
               <span className="mt-1 block text-xs text-muted">
-                ใช้อีเมลอะไรก็ได้ — รายงานและรหัสเปิดจะส่งไปที่อีเมลนี้ จึงต้องยืนยันก่อนใช้งาน
+                {otpRequired
+                  ? 'ใช้อีเมลอะไรก็ได้ — รายงานและรหัสเปิดจะส่งไปที่อีเมลนี้ จึงต้องยืนยันก่อนใช้งาน'
+                  : 'ใช้อีเมลอะไรก็ได้ — รายงานและรหัสเปิดจะส่งไปที่อีเมลนี้ ตรวจตัวสะกดให้ถูกต้อง'}
               </span>
             </label>
 
+            {!otpRequired && accountFields}
+
             {error && <ErrorBox message={error} />}
 
-            <button
-              type="submit"
-              disabled={requestOtp.isPending || !email}
-              className="btn-primary mt-6 w-full py-3 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {requestOtp.isPending ? 'กำลังส่งรหัส…' : 'ส่งรหัสยืนยันไปที่อีเมล'}
-            </button>
+            {otpRequired ? (
+              <button
+                type="submit"
+                disabled={requestOtp.isPending || !email}
+                className="btn-primary mt-6 w-full py-3 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {requestOtp.isPending ? 'กำลังส่งรหัส…' : 'ส่งรหัสยืนยันไปที่อีเมล'}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={register.isPending || !email || !name || !password || !confirm}
+                className="btn-primary mt-6 w-full py-3 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {register.isPending ? 'กำลังสร้างบัญชี…' : 'สร้างบัญชีและเข้าสู่ระบบ'}
+              </button>
+            )}
           </form>
         )}
 
@@ -188,36 +250,7 @@ export default function RegisterPage() {
             <OtpHint email={email} challenge={challenge} />
             <OtpField value={code} onChange={setCode} />
 
-            <label className="mt-4 block">
-              <span className="field-label">ชื่อที่ใช้แสดง</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="field"
-                placeholder={accountType === 'employer' ? 'เช่น คุณบัส' : 'เช่น คุณนุช'}
-                autoComplete="name"
-              />
-            </label>
-            <label className="mt-4 block">
-              <span className="field-label">รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="field"
-                autoComplete="new-password"
-              />
-            </label>
-            <label className="mt-4 block">
-              <span className="field-label">ยืนยันรหัสผ่าน</span>
-              <input
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                className="field"
-                autoComplete="new-password"
-              />
-            </label>
+            {accountFields}
 
             {error && <ErrorBox message={error} />}
 

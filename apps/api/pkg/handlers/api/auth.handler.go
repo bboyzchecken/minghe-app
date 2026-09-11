@@ -63,9 +63,10 @@ func (s *Server) RequestRegister(c echo.Context) error {
 }
 
 type registerBody struct {
-	Email     string `json:"email" validate:"required,email"`
-	Code      string `json:"code" validate:"required,len=6"`
-	Ref       string `json:"ref" validate:"required"`
+	Email string `json:"email" validate:"required,email"`
+	// Code/Ref ว่างได้เมื่อปิด OTP — ตอนเปิดอยู่ consumeOTP จะปฏิเสธค่าว่างเอง
+	Code      string `json:"code" validate:"omitempty,len=6"`
+	Ref       string `json:"ref"`
 	Password  string `json:"password" validate:"required,min=8"`
 	Name      string `json:"name" validate:"required"`
 	ConsentID *uint  `json:"consent_id"` // consent ที่บันทึกไว้ก่อนล็อกอิน (F-03/F-06)
@@ -81,8 +82,14 @@ func (s *Server) Register(c echo.Context) error {
 	}
 
 	email := str.NormalizeEmail(body.Email)
-	if err := s.consumeOTP(email, models.PurposeRegister, body.Ref, body.Code); err != nil {
-		return c.JSON(http.StatusUnauthorized, request.Err(err.Error()))
+	// ปิด OTP (MINGHE_OTP_REQUIRED=false) → สมัครได้เลย แต่บัญชีจะถูกบันทึกว่ายังไม่ยืนยันอีเมล
+	var verifiedAt *time.Time
+	if s.Config.OTPRequired {
+		if err := s.consumeOTP(email, models.PurposeRegister, body.Ref, body.Code); err != nil {
+			return c.JSON(http.StatusUnauthorized, request.Err(err.Error()))
+		}
+		now := time.Now()
+		verifiedAt = &now
 	}
 
 	hash, err := request.HashPassword(body.Password)
@@ -90,13 +97,12 @@ func (s *Server) Register(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, request.Err("cannot hash password"))
 	}
 
-	now := time.Now()
 	user := &models.User{
 		Email:           email,
 		PasswordHash:    hash,
 		Name:            body.Name,
 		Provider:        models.ProviderEmail,
-		EmailVerifiedAt: &now,
+		EmailVerifiedAt: verifiedAt,
 		Role:            models.RoleUser,
 		Status:          models.StatusActive,
 		Locale:          "th",

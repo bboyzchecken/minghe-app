@@ -107,6 +107,8 @@ func loadConfig() core.Config {
 		// ค่าที่ไม่รู้จักถือเป็น live — ปลอดภัยกว่าเผลอเปิดบัญชีทดลองบนของจริง
 		mode = core.ModeLive
 	}
+	// ไม่ตั้งค่า = บังคับ OTP — ต้องตั้ง false เองถึงจะปิด
+	viper.SetDefault("MINGHE_OTP_REQUIRED", true)
 
 	return core.Config{
 		Environment:        viper.GetString("ENV"),
@@ -117,6 +119,7 @@ func loadConfig() core.Config {
 		Mode:               mode,
 		GoogleLoginEnabled: viper.GetBool("MINGHE_GOOGLE_LOGIN_ENABLED"),
 		OTPEcho:            viper.GetBool("MINGHE_OTP_ECHO"),
+		OTPRequired:        viper.GetBool("MINGHE_OTP_REQUIRED"),
 		SeedDemoAccounts:   viper.GetBool("MINGHE_SEED_DEMO_ACCOUNTS"),
 		CORSAllowedOrigins: splitCSV(viper.GetString("CORS_ALLOWED_ORIGINS")),
 

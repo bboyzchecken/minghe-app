@@ -15,9 +15,11 @@ type modeResponse struct {
 	// GoogleClientID ปล่อยออกได้โดยไม่เป็นความลับ (ฝังในหน้าเว็บอยู่แล้วตามสเปกของ Google)
 	// ส่งผ่าน API แทนการฝังตอน build เพราะหน้าเว็บเป็น static export — ได้ client id มาแล้ว
 	// ตั้งค่าที่ .env ฝั่งเดียวแล้วรีสตาร์ต API พอ ไม่ต้อง build หน้าเว็บใหม่ (F-02)
-	GoogleClientID  string               `json:"google_client_id,omitempty"`
-	GoogleLoginNote string               `json:"google_login_note,omitempty"`
-	MockAccounts    []models.MockAccount `json:"mock_accounts"`
+	GoogleClientID  string `json:"google_client_id,omitempty"`
+	GoogleLoginNote string `json:"google_login_note,omitempty"`
+	// OTPRequired — false = หน้าสมัครสมาชิกข้ามขั้นกรอกรหัสยืนยันอีเมล
+	OTPRequired  bool                 `json:"otp_required"`
+	MockAccounts []models.MockAccount `json:"mock_accounts"`
 }
 
 // GetMode บอกหน้าเว็บว่า API ตัวนี้ทำงานโหมดไหน และมีบัญชีทดลองให้กดหรือไม่
@@ -28,6 +30,7 @@ func (s *Server) GetMode(c echo.Context) error {
 	res := modeResponse{
 		Mode:               s.Config.Mode,
 		GoogleLoginEnabled: s.Config.GoogleLoginEnabled,
+		OTPRequired:        s.Config.OTPRequired,
 		MockAccounts:       []models.MockAccount{},
 	}
 	if s.Config.GoogleLoginEnabled && s.Config.OAuth.GoogleClientID != "" {

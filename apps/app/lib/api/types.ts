@@ -38,6 +38,8 @@ export interface RuntimeConfig {
   googleClientId?: string
   /** เหตุผลที่ปุ่ม Google ยังกดไม่ได้ — แสดงใต้ปุ่มตรง ๆ */
   googleLoginNote?: string
+  /** false = สมัครสมาชิกได้โดยไม่ต้องกรอก OTP (API ตั้ง MINGHE_OTP_REQUIRED=false) */
+  otpRequired: boolean
   /** บัญชีทดลอง — ลิสต์ว่างเมื่อ API อยู่โหมด live */
   mockAccounts: MockAccount[]
 }
